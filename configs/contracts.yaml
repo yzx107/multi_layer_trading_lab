@@ -1,0 +1,23 @@
+contracts:
+  time:
+    execution_timezone: Asia/Hong_Kong
+    canonical_timestamp: event_ts
+    ingestion_timestamp: ingested_at
+
+  required_tables:
+    - security_master
+    - daily_features
+    - intraday_l2_features
+    - signal_events
+    - execution_log
+
+  lineage:
+    required_columns:
+      - data_source
+      - source_dataset
+      - source_run_id
+      - ingested_at
+
+  schema_policy:
+    mode: contract_first
+    unknown_column_behavior: fail

@@ -1,0 +1,22 @@
+risk:
+  default_kelly_fraction: ${DEFAULT_KELLY_FRACTION:0.25}
+  allowed_kelly_fractions:
+    - 1.0
+    - 0.5
+    - 0.25
+    - 0.125
+
+position_limits:
+  max_single_name_gross: ${MAX_SINGLE_NAME_GROSS:0.1}
+  max_orders_per_symbol_per_day: 4
+
+strategy_limits:
+  max_strategy_risk_budget: ${MAX_STRATEGY_RISK_BUDGET:0.25}
+  max_strategy_gross_leverage: 1.5
+
+session_controls:
+  max_intraday_drawdown: ${MAX_INTRADAY_DRAWDOWN:0.03}
+  signal_max_age_seconds: ${SIGNAL_MAX_AGE_SECONDS:300}
+  open_slippage_halt_bps: ${OPEN_SLIPPAGE_HALT_BPS:35}
+  reject_on_market_data_gap: true
+  reject_on_stale_quote: true

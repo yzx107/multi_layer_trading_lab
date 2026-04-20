@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+.coverage
+htmlcov/
+data/
+logs/
+artifacts/
+*.duckdb

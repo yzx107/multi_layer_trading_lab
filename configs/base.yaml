@@ -1,0 +1,24 @@
+app:
+  name: multi_layer_trading_lab
+  env: ${APP_ENV:dev}
+  timezone: Asia/Hong_Kong
+  log_level: ${LOG_LEVEL:INFO}
+
+markets:
+  primary:
+    - HK
+    - US
+  secondary:
+    - CN
+
+holding_horizons:
+  primary:
+    - intraday
+    - 1d
+    - 3d
+    - 5d
+
+philosophy:
+  lead_lag_note: "Lead-lag and transfer entropy are candidate information-flow tools, not causal proof."
+  bayes_note: "Bayesian updating is used to refresh setup win rate and regime beliefs."
+  kelly_note: "Kelly is a position-size ceiling, not a mechanical order trigger."

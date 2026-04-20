@@ -1,0 +1,29 @@
+brokers:
+  default_mode: ${DEFAULT_BROKER_MODE:DRY_RUN}
+
+  futu:
+    enabled: true
+    host: ${FUTU_HOST:127.0.0.1}
+    port: ${FUTU_PORT:11111}
+    market: ${FUTU_MARKET:HK}
+    env: ${FUTU_ENV:SIMULATE}
+    supports:
+      market_data: true
+      execution: true
+      paper: true
+      dry_run: true
+      live: true
+
+  ibkr:
+    enabled: true
+    host: ${IBKR_HOST:127.0.0.1}
+    port: ${IBKR_PORT:7497}
+    client_id: ${IBKR_CLIENT_ID:1}
+    account: ${IBKR_ACCOUNT:}
+    env: ${IBKR_ENV:PAPER}
+    supports:
+      market_data: true
+      execution: true
+      paper: true
+      dry_run: true
+      live: true

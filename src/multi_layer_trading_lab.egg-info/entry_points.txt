@@ -1,0 +1,2 @@
+[console_scripts]
+mttl = multi_layer_trading_lab.cli:app

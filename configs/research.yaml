@@ -1,0 +1,48 @@
+research:
+  default_markets:
+    - HK
+    - US
+
+  datasets:
+    security_master:
+      enabled: true
+      refresh: daily
+    daily_bars:
+      enabled: true
+      refresh: daily
+    minute_bars:
+      enabled: true
+      refresh: daily
+    hk_l2_ticks:
+      enabled: true
+      refresh: eod
+
+  l2_aggregation_windows:
+    - 1s
+    - 5s
+    - 30s
+    - 1m
+
+  feature_sets:
+    daily_v1:
+      includes:
+        - returns
+        - volatility
+        - turnover
+        - overnight_mapping_placeholder
+        - southbound_northbound_placeholder
+    intraday_v1:
+      includes:
+        - open_return_5m
+        - open_return_15m
+        - open_return_30m
+        - volume_ratio
+        - intraday_volatility
+        - gap_continuation_reversal
+    l2_v1:
+      includes:
+        - bid_ask_imbalance
+        - trade_imbalance
+        - cancel_rate_proxy
+        - pre_open_summary
+        - depth_slope_summary

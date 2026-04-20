@@ -1,0 +1,26 @@
+storage:
+  format: parquet
+  catalog: duckdb
+  duckdb_path: ${DUCKDB_PATH:./duckdb/research.duckdb}
+
+paths:
+  raw: ${RAW_DATA_ROOT:./data/raw}
+  staging: ${STAGING_DATA_ROOT:./data/staging}
+  curated: ${CURATED_DATA_ROOT:./data/curated}
+  features: ${FEATURE_DATA_ROOT:./data/features}
+  logs: ${LOG_DATA_ROOT:./data/logs}
+
+partitioning:
+  default:
+    - market
+    - trade_date
+  daily_features:
+    - market
+    - as_of_date
+  execution_log:
+    - broker
+    - trade_date
+
+duckdb:
+  threads: 4
+  preserve_insertion_order: false
