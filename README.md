@@ -110,7 +110,7 @@
 - `FUTU_HOST`, `FUTU_PORT`
 - `IBKR_HOST`, `IBKR_PORT`, `IBKR_CLIENT_ID`
 
-参考 [.env.example](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/.env.example) 与 `configs/` 下的样例文件。
+参考 [.env.example](.env.example) 与 `configs/` 下的样例文件。
 
 ## 技术栈
 
@@ -135,8 +135,8 @@
 
 ## 配套文档
 
-- [ARCHITECTURE.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/ARCHITECTURE.md)
-- [ROADMAP.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/ROADMAP.md)
-- [TASKS.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/TASKS.md)
-- [CHANGELOG.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/CHANGELOG.md)
-- [data_contracts/README.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/README.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [ROADMAP.md](ROADMAP.md)
+- [TASKS.md](TASKS.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [data_contracts/README.md](data_contracts/README.md)
