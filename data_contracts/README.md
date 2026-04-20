@@ -25,13 +25,13 @@
 
 ## 主表
 
-- [security_master.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/security_master.md)
-- [daily_features.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/daily_features.md)
-- [intraday_l2_features.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/intraday_l2_features.md)
-- [signal_events.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/signal_events.md)
-- [execution_log.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/execution_log.md)
-- [orders.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/orders.md)
-- [fills.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/fills.md)
-- [positions.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/positions.md)
-- [risk_snapshots.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/risk_snapshots.md)
-- [feature_registry.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/feature_registry.md)
+- [security_master.md](security_master.md)
+- [daily_features.md](daily_features.md)
+- [intraday_l2_features.md](intraday_l2_features.md)
+- [signal_events.md](signal_events.md)
+- [execution_log.md](execution_log.md)
+- [orders.md](orders.md)
+- [fills.md](fills.md)
+- [positions.md](positions.md)
+- [risk_snapshots.md](risk_snapshots.md)
+- [feature_registry.md](feature_registry.md)
