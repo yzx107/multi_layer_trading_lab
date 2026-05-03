@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import polars as pl
 import typer
 
 from multi_layer_trading_lab.pipelines.demo_pipeline import run_data_pipeline, run_demo_stack
+from multi_layer_trading_lab.pipelines.research_pipeline import run_research_workflow
 
 app = typer.Typer(help="Multi-layer trading lab CLI")
 
@@ -56,6 +58,27 @@ def dry_run_signals(data_root: str = "data") -> None:
         f"signals={len(outputs['signal_event_objects'])} "
         f"log={outputs['execution_log_path']}"
     )
+
+
+@app.command()
+def research_demo(data_root: str = "data") -> None:
+    outputs = run_research_workflow(Path(data_root))
+    typer.echo(
+        "research "
+        f"daily={outputs['daily_features'].height} "
+        f"l2={outputs['intraday_l2_features'].height} "
+        f"signals={outputs['signal_events'].height} "
+        f"report={outputs['research_report_path']}"
+    )
+
+
+@app.command()
+def validate_research(data_root: str = "data") -> None:
+    outputs = run_research_workflow(Path(data_root))
+    summary = outputs["validation_summary"]
+    passed = int(summary.filter(pl.col("passed")).height)
+    total = summary.height
+    typer.echo(f"validation passed={passed}/{total}")
 
 
 if __name__ == "__main__":

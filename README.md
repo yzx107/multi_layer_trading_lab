@@ -2,7 +2,23 @@
 
 `multi_layer_trading_lab` 是一个面向本地研究机的港股 / 美股多层研究与执行框架骨架，服务于中低频、事件驱动、港美联动以及港股开盘到日内的微观结构研究与执行优化。
 
-第一版聚焦一条真实可落地的最小闭环：
+当前版本已经包含两条可运行链路：
+
+1. `demo execution loop`
+2. `research deepening workflow`
+
+其中 research 这条链是本轮重点，覆盖：
+
+- contract validation
+- feature registry
+- dataset quality report
+- symbol normalization
+- horizon labeling / event outcomes
+- Bayesian posterior attachment
+- batch lead-lag / transfer entropy ranking
+- markdown research summary report
+
+第一版的基础闭环仍然保留：
 
 1. 用 `Tushare` 拉取 `security_master` 与日频 / 分钟级研究数据
 2. 从本地港股 `L2 tick` 文件加载并聚合微观结构特征
@@ -72,6 +88,10 @@
 - 研究与执行解耦
 - dry-run / paper / live 三态接口规划
 - feature lineage、signal log、execution log 的观测设计
+- 研究侧 `contract validation + quality report + feature registry`
+- `symbol normalization + horizon labeling + event outcome extraction`
+- `Bayesian posterior` 和 `lead-lag` 批量扫描
+- `research_summary.md` 报告产出
 
 ### v1 预计只做最小实现的部分
 
@@ -101,6 +121,14 @@
 6. 进入 backtest 验证收益、换手、回撤、hit ratio
 7. 使用统一 `BrokerAdapter` 切到 `dry-run` 或 `paper`
 8. 将拟订单、成交、风控快照写入执行表
+
+如果只做 research、暂不碰交易模块，现在也可以单独跑：
+
+1. 生成 contract-aligned `security_master / daily_features / intraday_l2_features`
+2. 做 `quality + validation`
+3. 生成 `feature_registry`
+4. 跑 `horizon labels / Bayesian posterior / lead-lag`
+5. 输出 `research_summary.md`
 
 ## 配置与凭证
 
@@ -140,3 +168,31 @@
 - [TASKS.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/TASKS.md)
 - [CHANGELOG.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/CHANGELOG.md)
 - [data_contracts/README.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/README.md)
+
+## 快速运行
+
+安装依赖：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+```
+
+运行 research demo：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli research-demo
+.venv/bin/python -m multi_layer_trading_lab.cli validate-research
+```
+
+或直接运行脚本：
+
+```bash
+.venv/bin/python scripts/run_research_demo.py
+```
+
+运行测试：
+
+```bash
+.venv/bin/python -m pytest
+```
