@@ -47,13 +47,25 @@ def _status(approved: bool) -> str:
     return "passed" if approved else "blocked"
 
 
-def _profitability_ready(path: Path | None) -> tuple[bool, dict[str, object] | None, list[str]]:
+def _profitability_ready(
+    path: Path | None,
+    reference_paths: tuple[Path | None, ...] = (),
+) -> tuple[bool, dict[str, object] | None, list[str]]:
     if path is None:
         return False, None, ["missing_profitability_evidence_path"]
     if not path.exists():
         return False, None, ["missing_profitability_evidence"]
-    payload = _load_json(path)
+    payload = dict(_load_json(path))
     failed: list[str] = []
+    stale_reference_paths = [
+        str(reference_path)
+        for reference_path in reference_paths
+        if _is_older_than(path, reference_path)
+    ]
+    if stale_reference_paths:
+        payload["profitability_evidence_stale"] = True
+        payload["stale_reference_paths"] = stale_reference_paths
+        failed.append("stale_profitability_evidence")
     if payload.get("ready") is False:
         failed.extend(str(reason) for reason in payload.get("failed_reasons", []))
     if float(payload.get("paper_sessions", 0) or 0) < 20:
@@ -393,6 +405,54 @@ def _paper_ledger_evidence(
     return ledger, list(dict.fromkeys(failed))
 
 
+def _profitability_ledger_failures(
+    profitability: dict[str, object] | None,
+    ledger: PaperSessionLedger | None,
+) -> list[str]:
+    if profitability is None or ledger is None:
+        return []
+    failed: list[str] = []
+    paper_sessions = _optional_int(profitability.get("paper_sessions"))
+    inferred_sessions = _optional_int(profitability.get("inferred_session_count"))
+    if paper_sessions is None:
+        failed.append("missing_profitability_paper_sessions")
+    elif paper_sessions != ledger.inferred_session_count:
+        failed.append("profitability_session_count_mismatch")
+    if inferred_sessions is None:
+        failed.append("missing_profitability_inferred_session_count")
+    elif inferred_sessions != ledger.inferred_session_count:
+        failed.append("profitability_inferred_session_count_mismatch")
+
+    session_dates = profitability.get("session_dates")
+    if not isinstance(session_dates, list):
+        failed.append("missing_profitability_session_dates")
+    else:
+        profitability_dates = tuple(sorted(str(item) for item in session_dates))
+        if profitability_dates != ledger.session_dates:
+            failed.append("profitability_session_dates_mismatch")
+
+    execution_rows = _optional_int(profitability.get("execution_log_rows"))
+    broker_rows = _optional_int(profitability.get("broker_report_rows"))
+    if execution_rows is None:
+        failed.append("missing_profitability_execution_log_rows")
+    elif execution_rows != ledger.execution_log_rows:
+        failed.append("profitability_execution_log_rows_mismatch")
+    if broker_rows is None:
+        failed.append("missing_profitability_broker_report_rows")
+    elif broker_rows != ledger.broker_report_rows:
+        failed.append("profitability_broker_report_rows_mismatch")
+    return failed
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     readiness = _load_json(input_data.readiness_manifest_path)
     ifind_validation_payload = _ifind_validation_payload(input_data.ifind_validation_report_path)
@@ -401,7 +461,8 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         and input_data.ifind_ingestion_status_path.exists()
     ) else None
     profitability_ready, profitability_payload, profitability_failed = _profitability_ready(
-        input_data.profitability_evidence_path
+        input_data.profitability_evidence_path,
+        reference_paths=(input_data.execution_log_path, input_data.broker_report_path),
     )
     paper_progress_ready, paper_progress_payload, paper_progress_failed = _paper_progress_ready(
         input_data.paper_progress_path,
@@ -427,6 +488,26 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         execution_log_path=input_data.execution_log_path,
         broker_report_path=input_data.broker_report_path,
     )
+    profitability_failed.extend(
+        _profitability_ledger_failures(profitability_payload, paper_ledger)
+    )
+    profitability_failed = list(dict.fromkeys(profitability_failed))
+    if _has_any(
+        profitability_failed,
+        [
+            "missing_profitability_broker_report_rows",
+            "missing_profitability_execution_log_rows",
+            "missing_profitability_inferred_session_count",
+            "missing_profitability_paper_sessions",
+            "missing_profitability_session_dates",
+            "profitability_broker_report_rows_mismatch",
+            "profitability_execution_log_rows_mismatch",
+            "profitability_inferred_session_count_mismatch",
+            "profitability_session_count_mismatch",
+            "profitability_session_dates_mismatch",
+        ],
+    ):
+        profitability_ready = False
     data_sources = {
         str(source.get("source")): source
         for source in readiness.get("data_sources", [])
@@ -1013,6 +1094,23 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
     if requirement == "profitable_reconciled_paper_or_live_evidence":
         if "profitability_not_reconciled_to_broker" in failed:
             return "reconcile_profitability_evidence_to_broker"
+        if _has_any(
+            failed,
+            [
+                "missing_profitability_broker_report_rows",
+                "missing_profitability_execution_log_rows",
+                "missing_profitability_inferred_session_count",
+                "missing_profitability_paper_sessions",
+                "missing_profitability_session_dates",
+                "profitability_broker_report_rows_mismatch",
+                "profitability_execution_log_rows_mismatch",
+                "profitability_inferred_session_count_mismatch",
+                "profitability_session_count_mismatch",
+                "profitability_session_dates_mismatch",
+                "stale_profitability_evidence",
+            ],
+        ):
+            return "refresh_profitability_evidence"
         if "stale_paper_progress" in failed:
             return "refresh_paper_progress"
         if _has_any(

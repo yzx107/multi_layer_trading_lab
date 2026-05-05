@@ -773,6 +773,10 @@ def test_objective_audit_uses_paper_progress_for_profitability_next_action(
             {
                 "ready": True,
                 "paper_sessions": 20,
+                "inferred_session_count": 20,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 21)],
+                "execution_log_rows": 20,
+                "broker_report_rows": 20,
                 "net_pnl": 1200.0,
                 "max_drawdown": -3000.0,
                 "max_allowed_drawdown": 10_000.0,
@@ -883,6 +887,10 @@ def test_objective_audit_blocks_stale_paper_progress(tmp_path) -> None:
             {
                 "ready": True,
                 "paper_sessions": 20,
+                "inferred_session_count": 20,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 21)],
+                "execution_log_rows": 20,
+                "broker_report_rows": 20,
                 "net_pnl": 1200.0,
                 "max_drawdown": -3000.0,
                 "max_allowed_drawdown": 10_000.0,
@@ -942,6 +950,8 @@ def test_objective_audit_blocks_stale_paper_progress(tmp_path) -> None:
     )
     _write_ready_opend_account_status(account)
     os.utime(progress, (1000, 1000))
+    os.utime(execution_log, (1500, 1500))
+    os.utime(broker_report, (1500, 1500))
     os.utime(profitability, (2000, 2000))
 
     audit = build_objective_audit(
@@ -974,6 +984,240 @@ def test_objective_audit_blocks_stale_paper_progress(tmp_path) -> None:
     assert profit_check["evidence"]["paper_progress"]["paper_progress_stale"] is True
     assert str(profitability) in profit_check["evidence"]["paper_progress"]["stale_reference_paths"]
     assert checklist_item["next_required_action"] == "refresh_paper_progress"
+
+
+def test_objective_audit_blocks_profitability_ledger_mismatch(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": True,
+                "paper_sessions": 20,
+                "inferred_session_count": 20,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 21)],
+                "execution_log_rows": 20,
+                "broker_report_rows": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    execution_log.write_text(
+        json.dumps({"order_id": "ord-1", "trade_date": "2026-05-05", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-05 10:00:00"}]),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":true}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    _write_ready_opend_account_status(account)
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            execution_log_path=execution_log,
+            broker_report_path=broker_report,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
+        )
+    )
+    profit_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "profitability_session_count_mismatch" in profit_check["failed_reasons"]
+    assert "profitability_session_dates_mismatch" in profit_check["failed_reasons"]
+    assert "profitability_execution_log_rows_mismatch" in profit_check["failed_reasons"]
+    assert "profitability_broker_report_rows_mismatch" in profit_check["failed_reasons"]
+    assert checklist_item["next_required_action"] == "refresh_profitability_evidence"
+
+
+def test_objective_audit_blocks_stale_profitability_evidence(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    rows = [
+        {
+            "order_id": f"ord-{day}",
+            "trade_date": f"2026-04-{day:02d}",
+            "dry_run": False,
+        }
+        for day in range(1, 21)
+    ]
+    broker_rows = [
+        {
+            "local_order_id": f"ord-{day}",
+            "updated_time": f"2026-04-{day:02d} 10:00:00",
+        }
+        for day in range(1, 21)
+    ]
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": True,
+                "paper_sessions": 20,
+                "inferred_session_count": 20,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 21)],
+                "execution_log_rows": 20,
+                "broker_report_rows": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    execution_log.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(json.dumps(broker_rows), encoding="utf-8")
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":true}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    _write_ready_opend_account_status(account)
+    os.utime(profitability, (1000, 1000))
+    os.utime(execution_log, (2000, 2000))
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            execution_log_path=execution_log,
+            broker_report_path=broker_report,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
+        )
+    )
+    profit_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "stale_profitability_evidence" in profit_check["failed_reasons"]
+    assert profit_check["evidence"]["profitability_evidence_stale"] is True
+    assert str(execution_log) in profit_check["evidence"]["stale_reference_paths"]
+    assert checklist_item["next_required_action"] == "refresh_profitability_evidence"
 
 
 def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
