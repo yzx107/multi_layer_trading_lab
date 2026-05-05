@@ -627,18 +627,22 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         factor_reuse_failed,
     ) = _research_input_manifest_reuse(input_data.research_input_manifest_path)
 
-    intraday_l2_fresh = (
-        data_freshness.get("intraday_l2_features", {}).get("status") == "fresh"
-    )
+    intraday_l2_payload = data_freshness.get("intraday_l2_features", {})
+    intraday_l2_fresh = intraday_l2_payload.get("status") == "fresh"
+    intraday_l2_rows = _optional_int(intraday_l2_payload.get("rows")) or 0
+    intraday_l2_rows_ready = intraday_l2_rows >= 20
     hshare_verified_payload = _dict_payload(readiness.get("hshare_verified"))
     hk_l2_ready = (
         intraday_l2_fresh
+        and intraday_l2_rows_ready
         and hshare_verified_payload.get("ready") is True
         and not hshare_reuse_failed
     )
     hk_l2_failed: list[str] = []
     if not intraday_l2_fresh:
         hk_l2_failed.append("intraday_l2_features_not_fresh")
+    if not intraday_l2_rows_ready:
+        hk_l2_failed.append("insufficient_intraday_l2_feature_rows")
     if hshare_verified_payload.get("ready") is not True:
         hk_l2_failed.extend(
             _readiness_failed_reasons(
@@ -730,7 +734,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             "requirement": "hk_l2_data_reuse",
             "status": _status(hk_l2_ready),
             "evidence": {
-                "intraday_l2_features": data_freshness.get("intraday_l2_features", {}),
+                "intraday_l2_features": intraday_l2_payload,
                 "hshare_verified": hshare_verified_payload,
                 "research_input_manifest": research_input_manifest_payload,
             },
@@ -1027,6 +1031,7 @@ def _success_criteria() -> list[dict[str, object]]:
             ),
             "minimum_evidence": [
                 "intraday_l2_features fresh",
+                "intraday_l2_features has at least 20 rows",
                 "hshare_verified ready",
                 "research input manifest confirms Hshare Lab verified reuse when supplied",
             ],

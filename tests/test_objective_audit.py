@@ -472,6 +472,42 @@ def test_objective_audit_blocks_missing_research_input_manifest_when_supplied(
     assert hshare_item["next_required_action"] == "refresh_research_input_manifest"
 
 
+def test_objective_audit_blocks_sparse_intraday_l2_features(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 1}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+        )
+    )
+    hshare_check = [
+        check for check in audit["checks"] if check["requirement"] == "hk_l2_data_reuse"
+    ][0]
+
+    assert hshare_check["status"] == "blocked"
+    assert "insufficient_intraday_l2_feature_rows" in hshare_check["failed_reasons"]
+
+
 def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
