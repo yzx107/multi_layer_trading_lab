@@ -492,6 +492,10 @@ def test_build_daily_ops_commands_can_include_real_paper_evidence_paths() -> Non
     assert "20" in commands[12]
     assert "--manual-live-enable" in commands[12]
     assert commands[13][3] == "objective-audit"
+    assert "--execution-log-path" in commands[13]
+    assert "data/logs/execution.jsonl" in commands[13]
+    assert "--broker-report-path" in commands[13]
+    assert "data/logs/futu.json" in commands[13]
     assert commands[14][3] == "objective-audit-report"
 
 
@@ -536,6 +540,10 @@ def test_build_daily_ops_commands_can_build_full_paper_evidence_bundle() -> None
     assert commands[13][3] == "objective-audit"
     assert "--profitability-evidence-path" in commands[13]
     assert "data/logs/profitability.json" in commands[13]
+    assert "--execution-log-path" in commands[13]
+    assert "data/logs/execution.jsonl" in commands[13]
+    assert "--broker-report-path" in commands[13]
+    assert "data/logs/futu.json" in commands[13]
 
 
 def test_build_daily_ops_commands_can_auto_build_mark_prices_from_quote() -> None:

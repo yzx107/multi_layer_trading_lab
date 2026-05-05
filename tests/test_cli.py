@@ -2098,6 +2098,64 @@ def test_objective_audit_cli_writes_completion_gap_report(tmp_path) -> None:
     assert audit["objective_achieved"] is False
 
 
+def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    output = tmp_path / "objective_audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [],
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": False},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    execution_log.write_text(
+        json.dumps({"order_id": "ord-1", "trade_date": "2026-05-05", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-05 10:00:00"}]),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "objective-audit",
+            "--readiness-manifest-path",
+            str(readiness),
+            "--output-path",
+            str(output),
+            "--execution-log-path",
+            str(execution_log),
+            "--broker-report-path",
+            str(broker_report),
+        ],
+    )
+
+    assert result.exit_code == 0
+    audit = json.loads(output.read_text(encoding="utf-8"))
+    paper_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "paper_to_live_execution_evidence"
+    ][0]
+    assert (
+        paper_check["evidence"]["paper_session_ledger"]["inferred_session_count"]
+        == 1
+    )
+
+
 def test_objective_audit_report_cli_writes_markdown(tmp_path) -> None:
     audit_path = tmp_path / "objective_audit.json"
     output_path = tmp_path / "objective_audit.md"

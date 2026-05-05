@@ -4,6 +4,11 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from multi_layer_trading_lab.execution.session_ledger import (
+    PaperSessionLedger,
+    build_paper_session_ledger,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveAuditInput:
@@ -17,6 +22,8 @@ class ObjectiveAuditInput:
     opend_runtime_status_path: Path | None = None
     opend_account_status_path: Path | None = None
     paper_simulate_status_path: Path | None = None
+    execution_log_path: Path | None = None
+    broker_report_path: Path | None = None
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -267,6 +274,29 @@ def _readiness_failed_reasons(evidence: object, default_reason: str) -> list[str
     return list(dict.fromkeys(reasons or [default_reason]))
 
 
+def _paper_ledger_evidence(
+    *,
+    execution_log_path: Path | None,
+    broker_report_path: Path | None,
+) -> tuple[PaperSessionLedger | None, list[str]]:
+    if execution_log_path is None and broker_report_path is None:
+        return None, []
+    if execution_log_path is None:
+        return None, ["missing_execution_log_path"]
+    if broker_report_path is None:
+        return None, ["missing_broker_report_path"]
+    ledger = build_paper_session_ledger(
+        execution_log_path=execution_log_path,
+        broker_report_path=broker_report_path,
+    )
+    failed = list(ledger.failed_reasons)
+    if ledger.inferred_session_count < 20:
+        failed.append("insufficient_broker_backed_paper_sessions")
+    if ledger.dry_run_rows:
+        failed.append("dry_run_rows_present")
+    return ledger, list(dict.fromkeys(failed))
+
+
 def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     readiness = _load_json(input_data.readiness_manifest_path)
     ifind_validation_payload = _ifind_validation_payload(input_data.ifind_validation_report_path)
@@ -283,6 +313,10 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.opend_runtime_status_path,
         input_data.opend_account_status_path,
         input_data.paper_simulate_status_path,
+    )
+    paper_ledger, paper_ledger_failed = _paper_ledger_evidence(
+        execution_log_path=input_data.execution_log_path,
+        broker_report_path=input_data.broker_report_path,
     )
     data_sources = {
         str(source.get("source")): source
@@ -328,6 +362,10 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             "paper_to_live_not_approved",
         )
     )
+    paper_failed.extend(paper_ledger_failed)
+    paper_failed = list(dict.fromkeys(paper_failed))
+    paper_direct_evidence_ready = paper_ledger is None or not paper_ledger_failed
+    paper_ready = paper_ready and paper_direct_evidence_ready
     go_live_ready = readiness.get("go_live_approved") is True
 
     checks = [
@@ -384,7 +422,10 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         {
             "requirement": "paper_to_live_execution_evidence",
             "status": _status(paper_ready),
-            "evidence": paper_to_live_evidence,
+            "evidence": _paper_to_live_evidence_payload(
+                paper_to_live_evidence,
+                paper_ledger,
+            ),
             "failed_reasons": paper_failed,
         },
         {
@@ -450,6 +491,16 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             if input_data.paper_simulate_status_path is not None
             else None
         ),
+        "execution_log_path": (
+            str(input_data.execution_log_path)
+            if input_data.execution_log_path is not None
+            else None
+        ),
+        "broker_report_path": (
+            str(input_data.broker_report_path)
+            if input_data.broker_report_path is not None
+            else None
+        ),
         "checks": checks,
         "prompt_to_artifact_checklist": _prompt_to_artifact_checklist(
             checks=checks,
@@ -463,6 +514,8 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             opend_runtime_status_path=input_data.opend_runtime_status_path,
             opend_account_status_path=input_data.opend_account_status_path,
             paper_simulate_status_path=input_data.paper_simulate_status_path,
+            execution_log_path=input_data.execution_log_path,
+            broker_report_path=input_data.broker_report_path,
         ),
         "blocked_requirements": blocked,
         "completion_decision": {
@@ -481,6 +534,18 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         encoding="utf-8",
     )
     return audit
+
+
+def _paper_to_live_evidence_payload(
+    readiness_evidence: object,
+    paper_ledger: PaperSessionLedger | None,
+) -> dict[str, object]:
+    payload: dict[str, object] = (
+        dict(readiness_evidence) if isinstance(readiness_evidence, dict) else {}
+    )
+    if paper_ledger is not None:
+        payload["paper_session_ledger"] = paper_ledger.to_dict()
+    return payload
 
 
 def render_objective_audit_report(audit: dict[str, object]) -> str:
@@ -641,6 +706,8 @@ def _prompt_to_artifact_checklist(
     opend_runtime_status_path: Path | None,
     opend_account_status_path: Path | None,
     paper_simulate_status_path: Path | None,
+    execution_log_path: Path | None,
+    broker_report_path: Path | None,
 ) -> list[dict[str, object]]:
     check_by_requirement = {str(check["requirement"]): check for check in checks}
     artifacts = {
@@ -681,8 +748,11 @@ def _prompt_to_artifact_checklist(
         ],
         "paper_to_live_execution_evidence": [
             str(readiness_manifest_path),
+            str(execution_log_path) if execution_log_path else None,
+            str(broker_report_path) if broker_report_path else None,
             "src/multi_layer_trading_lab/execution/paper_audit.py",
             "src/multi_layer_trading_lab/execution/reconciliation.py",
+            "src/multi_layer_trading_lab/execution/session_ledger.py",
         ],
         "profitable_reconciled_paper_or_live_evidence": [
             str(profitability_evidence_path) if profitability_evidence_path else None,
@@ -702,7 +772,9 @@ def _prompt_to_artifact_checklist(
             "submit-opend-paper-tickets"
         ),
         "million_scale_personal_account_risk": "risk-precheck --account-equity 1000000",
-        "paper_to_live_execution_evidence": "paper-audit / build-paper-session-evidence-bundle",
+        "paper_to_live_execution_evidence": (
+            "paper-session-ledger / paper-audit / build-paper-session-evidence-bundle"
+        ),
         "profitable_reconciled_paper_or_live_evidence": "profitability-evidence",
     }
     checklist: list[dict[str, object]] = []
@@ -778,6 +850,16 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
             return "submit_opend_paper_tickets_with_simulate_enabled"
         return "refresh_opend_execution_evidence"
     if requirement == "paper_to_live_execution_evidence":
+        if _has_any(
+            failed,
+            [
+                "insufficient_broker_backed_paper_sessions",
+                "insufficient_inferred_sessions",
+            ],
+        ):
+            remaining = _remaining_broker_backed_sessions(check.get("evidence"))
+            if remaining is not None and remaining > 0:
+                return f"collect_{remaining}_remaining_broker_reconciled_paper_sessions"
         return "collect_broker_reconciled_paper_sessions"
     if requirement == "profitable_reconciled_paper_or_live_evidence":
         if "profitability_not_reconciled_to_broker" in failed:
@@ -835,6 +917,23 @@ def _remaining_paper_sessions(evidence: object, target_sessions: int = 20) -> in
     try:
         target = int(evidence.get("target_sessions", target_sessions) or target_sessions)
         sessions = int(evidence.get("paper_sessions", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    return max(target - sessions, 0)
+
+
+def _remaining_broker_backed_sessions(
+    evidence: object,
+    target_sessions: int = 20,
+) -> int | None:
+    if not isinstance(evidence, dict):
+        return None
+    ledger = evidence.get("paper_session_ledger")
+    if not isinstance(ledger, dict):
+        return None
+    try:
+        target = int(evidence.get("target_sessions", target_sessions) or target_sessions)
+        sessions = int(ledger.get("inferred_session_count", 0) or 0)
     except (TypeError, ValueError):
         return None
     return max(target - sessions, 0)

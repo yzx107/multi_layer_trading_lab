@@ -2413,6 +2413,8 @@ def objective_audit(
     opend_quote_snapshot_path: str | None = "data/logs/opend_quote_snapshot.json",
     opend_ticket_response_path: str | None = "data/logs/opend_paper_ticket_responses.jsonl",
     paper_simulate_status_path: str | None = None,
+    execution_log_path: str | None = None,
+    broker_report_path: str | None = None,
 ) -> None:
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -2442,6 +2444,8 @@ def objective_audit(
             paper_simulate_status_path=Path(paper_simulate_status_path)
             if paper_simulate_status_path
             else None,
+            execution_log_path=Path(execution_log_path) if execution_log_path else None,
+            broker_report_path=Path(broker_report_path) if broker_report_path else None,
         )
     )
     typer.echo(f"objective_achieved={str(audit['objective_achieved']).lower()}")

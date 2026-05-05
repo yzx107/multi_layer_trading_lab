@@ -425,6 +425,85 @@ def test_objective_audit_report_renders_blockers_and_next_evidence(tmp_path) -> 
     assert "paper_to_live_not_approved" in paper_check["failed_reasons"]
 
 
+def test_objective_audit_uses_paper_session_ledger_for_paper_to_live(
+    tmp_path,
+) -> None:
+    readiness = tmp_path / "readiness.json"
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False, "failed_reasons": ["not_evaluated"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    execution_log.write_text(
+        json.dumps({"order_id": "ord-1", "trade_date": "2026-05-05", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-05 10:00:00"}]),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            execution_log_path=execution_log,
+            broker_report_path=broker_report,
+        )
+    )
+    paper_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "paper_to_live_execution_evidence"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "paper_to_live_execution_evidence"
+    ][0]
+
+    assert paper_check["status"] == "blocked"
+    assert "not_evaluated" in paper_check["failed_reasons"]
+    assert "insufficient_broker_backed_paper_sessions" in paper_check["failed_reasons"]
+    assert (
+        paper_check["evidence"]["paper_session_ledger"]["inferred_session_count"]
+        == 1
+    )
+    assert str(execution_log) in checklist_item["artifacts"]
+    assert str(broker_report) in checklist_item["artifacts"]
+    assert (
+        checklist_item["next_required_action"]
+        == "collect_19_remaining_broker_reconciled_paper_sessions"
+    )
+
+
 def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
