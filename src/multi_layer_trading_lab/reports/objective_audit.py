@@ -1071,6 +1071,16 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
                 *operator_blockers,
             ]
         )
+    evidence_actions = _evidence_action_lines(audit)
+    if evidence_actions:
+        lines.extend(
+            [
+                "",
+                "## Evidence Actions",
+                "",
+                *evidence_actions,
+            ]
+        )
     lines.extend(
         [
             "",
@@ -1105,6 +1115,36 @@ def _operator_blocker_lines(audit: dict[str, object]) -> list[str]:
         if value is not None and _plain_report_value(value)
     )
     return [f"- opend_kill_switch: {details}"]
+
+
+def _evidence_action_lines(audit: dict[str, object]) -> list[str]:
+    lines: list[str] = []
+    checklist = audit.get("prompt_to_artifact_checklist", [])
+    if not isinstance(checklist, list):
+        return lines
+    for item in checklist:
+        if not isinstance(item, dict):
+            continue
+        actions = _next_required_evidence_actions(item.get("evidence"))
+        if not actions:
+            continue
+        requirement = item.get("requirement")
+        lines.append(f"- {requirement}: {_format_list(list(actions))}")
+    return lines
+
+
+def _next_required_evidence_actions(value: object) -> tuple[str, ...]:
+    actions: list[str] = []
+    if isinstance(value, dict):
+        raw_actions = value.get("next_required_evidence")
+        if isinstance(raw_actions, list):
+            actions.extend(str(item) for item in raw_actions if str(item))
+        for nested in value.values():
+            actions.extend(_next_required_evidence_actions(nested))
+    elif isinstance(value, list):
+        for item in value:
+            actions.extend(_next_required_evidence_actions(item))
+    return tuple(dict.fromkeys(actions))
 
 
 def _opend_kill_switch_blocker(audit: dict[str, object]) -> dict[str, object] | None:

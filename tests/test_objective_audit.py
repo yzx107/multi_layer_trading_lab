@@ -715,6 +715,46 @@ def test_objective_audit_report_renders_operator_kill_switch_details() -> None:
     )
 
 
+def test_objective_audit_report_renders_nested_evidence_actions() -> None:
+    audit = {
+        "objective_achieved": False,
+        "objective": "Build the platform.",
+        "blocked_requirements": ["profitable_reconciled_paper_or_live_evidence"],
+        "completion_decision": {
+            "status": "not_achieved",
+            "reason": "missing paper evidence",
+            "blocked_requirements": ["profitable_reconciled_paper_or_live_evidence"],
+        },
+        "prompt_to_artifact_checklist": [
+            {
+                "requirement": "profitable_reconciled_paper_or_live_evidence",
+                "status": "blocked",
+                "next_required_action": (
+                    "collect_19_remaining_broker_reconciled_paper_sessions"
+                ),
+                "verification_command": "profitability-evidence / paper-progress",
+                "artifacts": ["data/logs/paper_progress.json"],
+                "failed_reasons": ["paper_sessions_remaining"],
+                "evidence": {
+                    "paper_progress": {
+                        "next_required_evidence": [
+                            "collect_19_broker_reconciled_paper_sessions",
+                            "continue_until_positive_reconciled_net_pnl",
+                        ]
+                    }
+                },
+            }
+        ],
+    }
+
+    report = render_objective_audit_report(audit)
+
+    assert "## Evidence Actions" in report
+    assert "profitable_reconciled_paper_or_live_evidence" in report
+    assert "collect_19_broker_reconciled_paper_sessions" in report
+    assert "continue_until_positive_reconciled_net_pnl" in report
+
+
 def test_objective_audit_uses_paper_session_ledger_for_paper_to_live(
     tmp_path,
 ) -> None:
