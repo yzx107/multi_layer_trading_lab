@@ -96,7 +96,7 @@ data/logs/paper_session_plan.json
   --base-url http://127.0.0.1:8766
 ```
 
-如果 OpenD Web UI 未启动、ticket 试图提交真实订单、或 HTTP 调用失败，命令会 fail closed，不会生成响应证据文件。
+如果 OpenD Web UI 未启动、ticket 试图提交真实订单、或 HTTP 调用失败，命令会 fail closed，并把失败 response 写入 JSONL 方便审计。清理 kill-switch 或修好 OpenD 后，只重试这些失败 response 时使用 `--allow-failed-resubmit`；不要用它重提已经 `submitted=true` 的 ticket，成功提交过的 ticket 仍由默认幂等保护拦截。
 
 如果已经生成了 OpenD response JSONL，可以先抽成 Futu broker report 形状：
 

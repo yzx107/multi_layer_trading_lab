@@ -36,6 +36,7 @@ class DailyOpsPlan:
     submit_opend_dry_run_tickets: bool = False
     submit_opend_paper_simulate_tickets: bool = False
     require_paper_session_calendar_collect: bool = False
+    submit_opend_allow_failed_resubmit: bool = True
     submit_opend_max_attempts: int = 3
     submit_opend_retry_delay_seconds: float = 0.5
     ticket_path: Path | None = None
@@ -221,6 +222,8 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
             ]
             if plan.submit_opend_paper_simulate_tickets:
                 submit_command.append("--submit-paper-simulate")
+                if plan.submit_opend_allow_failed_resubmit:
+                    submit_command.append("--allow-failed-resubmit")
             commands.append(submit_command)
             if (
                 plan.submit_opend_paper_simulate_tickets
@@ -549,6 +552,7 @@ def default_plan(
     submit_opend_dry_run_tickets: bool = False,
     submit_opend_paper_simulate_tickets: bool = False,
     require_paper_session_calendar_collect: bool = False,
+    submit_opend_allow_failed_resubmit: bool = True,
     submit_opend_max_attempts: int = 3,
     submit_opend_retry_delay_seconds: float = 0.5,
     ticket_path: Path | None = None,
@@ -592,6 +596,7 @@ def default_plan(
         submit_opend_dry_run_tickets=submit_opend_dry_run_tickets,
         submit_opend_paper_simulate_tickets=submit_opend_paper_simulate_tickets,
         require_paper_session_calendar_collect=require_paper_session_calendar_collect,
+        submit_opend_allow_failed_resubmit=submit_opend_allow_failed_resubmit,
         submit_opend_max_attempts=submit_opend_max_attempts,
         submit_opend_retry_delay_seconds=submit_opend_retry_delay_seconds,
         ticket_path=ticket_path,

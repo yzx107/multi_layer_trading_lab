@@ -387,6 +387,86 @@ def test_submit_opend_paper_tickets_can_allow_resubmit(tmp_path) -> None:
     assert calls == ["http://127.0.0.1:8766/api/normal/order"]
 
 
+def test_submit_opend_paper_tickets_can_retry_failed_response_only(tmp_path) -> None:
+    ticket_path = tmp_path / "tickets.jsonl"
+    output_path = tmp_path / "responses.jsonl"
+    export_opend_paper_tickets(
+        _paper_plan(),
+        ticket_path,
+        symbol="00700.HK",
+        reference_price=100.0,
+        lot_size=100,
+    )
+    output_path.write_text(
+        json.dumps(
+            {
+                "ticket_id": "paper_001-001",
+                "response": {
+                    "ok": False,
+                    "submitted": False,
+                    "error": "HTTPError:400:ExecutionValidationError:Kill switch enabled",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_urlopen(request, timeout: float):
+        calls.append(request.full_url)
+        return FakeResponse({"submitted": True})
+
+    result = submit_opend_paper_tickets(
+        ticket_path,
+        output_path,
+        base_url="http://127.0.0.1:8766",
+        submit_paper_simulate=True,
+        allow_failed_resubmit=True,
+        urlopen_fn=fake_urlopen,
+    )
+
+    assert result.ready is True
+    assert calls == ["http://127.0.0.1:8766/api/normal/order"]
+
+
+def test_submit_opend_paper_tickets_does_not_retry_success_with_failed_resubmit_flag(
+    tmp_path,
+) -> None:
+    ticket_path = tmp_path / "tickets.jsonl"
+    output_path = tmp_path / "responses.jsonl"
+    export_opend_paper_tickets(
+        _paper_plan(),
+        ticket_path,
+        symbol="00700.HK",
+        reference_price=100.0,
+        lot_size=100,
+    )
+    output_path.write_text(
+        json.dumps({"ticket_id": "paper_001-001", "response": {"submitted": True}})
+        + "\n",
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_urlopen(request, timeout: float):
+        calls.append(request.full_url)
+        return FakeResponse({"submitted": True})
+
+    result = submit_opend_paper_tickets(
+        ticket_path,
+        output_path,
+        base_url="http://127.0.0.1:8766",
+        submit_paper_simulate=True,
+        allow_failed_resubmit=True,
+        urlopen_fn=fake_urlopen,
+    )
+
+    assert result.ready is False
+    assert calls == []
+    assert result.failed_reasons == ("ticket_already_submitted:paper_001-001",)
+
+
 def test_fetch_opend_runtime_status_blocks_kill_switch() -> None:
     from multi_layer_trading_lab.execution.opend_tickets import fetch_opend_runtime_status
 

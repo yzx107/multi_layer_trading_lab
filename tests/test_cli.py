@@ -150,6 +150,38 @@ def test_submit_opend_paper_tickets_cli_blocks_duplicate_response(tmp_path) -> N
     mocked.assert_not_called()
 
 
+def test_submit_opend_paper_tickets_cli_forwards_failed_resubmit_flag(tmp_path) -> None:
+    ticket_path = tmp_path / "tickets.jsonl"
+    output_path = tmp_path / "responses.jsonl"
+
+    class Result:
+        failed_reasons: tuple[str, ...] = ()
+        submitted_count = 1
+        response_count = 1
+
+        def __init__(self, path):
+            self.output_path = path
+
+    with patch("multi_layer_trading_lab.cli.post_opend_paper_tickets") as mocked:
+        mocked.return_value = Result(output_path)
+        result = CliRunner().invoke(
+            app,
+            [
+                "submit-opend-paper-tickets",
+                "--ticket-path",
+                str(ticket_path),
+                "--output-path",
+                str(output_path),
+                "--submit-paper-simulate",
+                "--allow-failed-resubmit",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert "status=ready" in result.output
+    assert mocked.call_args.kwargs["allow_failed_resubmit"] is True
+
+
 def test_reconcile_futu_report_cli_reports_clean_match(tmp_path) -> None:
     execution_log = tmp_path / "execution_log.jsonl"
     futu_report = tmp_path / "futu.json"

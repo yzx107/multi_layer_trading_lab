@@ -69,6 +69,15 @@ def main() -> None:
     parser.add_argument("--submit-opend-dry-run-tickets", action="store_true")
     parser.add_argument("--submit-opend-paper-simulate-tickets", action="store_true")
     parser.add_argument("--require-paper-session-calendar-collect", action="store_true")
+    parser.add_argument(
+        "--no-submit-opend-allow-failed-resubmit",
+        action="store_false",
+        dest="submit_opend_allow_failed_resubmit",
+        help=(
+            "Do not automatically retry tickets that only have failed OpenD responses "
+            "in the output JSONL."
+        ),
+    )
     parser.add_argument("--submit-opend-max-attempts", type=int, default=3)
     parser.add_argument("--submit-opend-retry-delay-seconds", type=float, default=0.5)
     parser.add_argument("--ticket-path")
@@ -116,6 +125,7 @@ def main() -> None:
         submit_opend_dry_run_tickets=args.submit_opend_dry_run_tickets,
         submit_opend_paper_simulate_tickets=args.submit_opend_paper_simulate_tickets,
         require_paper_session_calendar_collect=args.require_paper_session_calendar_collect,
+        submit_opend_allow_failed_resubmit=args.submit_opend_allow_failed_resubmit,
         submit_opend_max_attempts=args.submit_opend_max_attempts,
         submit_opend_retry_delay_seconds=args.submit_opend_retry_delay_seconds,
         ticket_path=Path(args.ticket_path) if args.ticket_path else None,

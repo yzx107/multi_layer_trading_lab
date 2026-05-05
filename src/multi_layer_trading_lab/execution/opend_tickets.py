@@ -228,6 +228,7 @@ def submit_opend_paper_tickets(
     base_url: str,
     submit_paper_simulate: bool = False,
     allow_resubmit: bool = False,
+    allow_failed_resubmit: bool = False,
     timeout_seconds: float = 8.0,
     max_attempts: int = 3,
     retry_delay_seconds: float = 0.5,
@@ -239,12 +240,16 @@ def submit_opend_paper_tickets(
         failed.append("missing_opend_paper_tickets")
     ticket_ids = {str(ticket.get("ticket_id") or "") for ticket in tickets}
     if output_path.exists() and not allow_resubmit:
-        existing_ticket_ids = {
-            str(response.get("ticket_id") or "")
-            for response in load_opend_paper_ticket_responses(output_path)
-        }
-        for ticket_id in sorted(ticket_ids & existing_ticket_ids):
+        existing_by_ticket_id = _responses_by_ticket_id(
+            load_opend_paper_ticket_responses(output_path)
+        )
+        for ticket_id in sorted(ticket_ids & existing_by_ticket_id.keys()):
             if ticket_id:
+                existing_responses = existing_by_ticket_id[ticket_id]
+                if allow_failed_resubmit and all(
+                    _response_failed(response) for response in existing_responses
+                ):
+                    continue
                 failed.append(f"ticket_already_submitted:{ticket_id}")
     responses: list[dict[str, object]] = []
     if failed:
@@ -337,6 +342,25 @@ def _submitted_response_count(responses: list[dict[str, object]]) -> int:
         if isinstance(response.get("response"), dict)
         and response["response"].get("ok") is not False
     )
+
+
+def _responses_by_ticket_id(
+    responses: list[dict[str, object]],
+) -> dict[str, list[dict[str, object]]]:
+    by_ticket_id: dict[str, list[dict[str, object]]] = {}
+    for response in responses:
+        ticket_id = str(response.get("ticket_id") or "")
+        if not ticket_id:
+            continue
+        by_ticket_id.setdefault(ticket_id, []).append(response)
+    return by_ticket_id
+
+
+def _response_failed(response_event: dict[str, object]) -> bool:
+    response = response_event.get("response")
+    if not isinstance(response, dict):
+        return False
+    return response.get("ok") is False or bool(response.get("error"))
 
 
 def _write_opend_paper_ticket_responses(

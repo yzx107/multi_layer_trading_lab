@@ -255,6 +255,7 @@ def test_build_daily_ops_commands_can_submit_exported_paper_simulate_tickets() -
         "submit-opend-paper-tickets",
     ]
     assert "--submit-paper-simulate" in commands[10]
+    assert "--allow-failed-resubmit" in commands[10]
     assert commands[11][:4] == [
         ".venv/bin/python",
         "-m",
@@ -294,6 +295,7 @@ def test_build_daily_ops_commands_can_require_calendar_collect_before_simulate_s
     assert "--execution-log-path" in commands[10]
     assert "data/logs/execution_log.paper_combined.jsonl" in commands[10]
     assert commands[11][3] == "submit-opend-paper-tickets"
+    assert "--allow-failed-resubmit" in commands[11]
     assert commands[12][3] == "paper-simulate-status"
 
 
@@ -322,6 +324,7 @@ def test_build_daily_ops_commands_can_submit_and_build_paper_simulate_evidence()
     assert commands[8][3] == "fetch-opend-account-status"
     assert commands[9][3] == "export-opend-paper-tickets"
     assert commands[10][3] == "submit-opend-paper-tickets"
+    assert "--allow-failed-resubmit" in commands[10]
     assert commands[11][3] == "paper-simulate-status"
     assert "--output-path" in commands[11]
     assert "data/logs/sim_status.json" in commands[11]
