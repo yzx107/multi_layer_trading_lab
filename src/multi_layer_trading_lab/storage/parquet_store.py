@@ -16,7 +16,12 @@ class ParquetStore:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def write(self, dataset: str, frame: pl.DataFrame, partition_cols: list[str] | None = None) -> Path:
+    def write(
+        self,
+        dataset: str,
+        frame: pl.DataFrame,
+        partition_cols: list[str] | None = None,
+    ) -> Path:
         path = self.dataset_path(dataset) / "part-000.parquet"
         if partition_cols:
             frame.write_parquet(path, use_pyarrow=True)
@@ -42,6 +47,9 @@ class DuckDBCatalog:
 
     def register_parquet(self, table_name: str, parquet_path: Path) -> None:
         with self.connect() as conn:
-            conn.execute(
-                f"create or replace view {table_name} as select * from read_parquet('{parquet_path.as_posix()}')"
+            parquet_uri = parquet_path.as_posix()
+            query = (
+                f"create or replace view {table_name} "
+                f"as select * from read_parquet('{parquet_uri}')"
             )
+            conn.execute(query)

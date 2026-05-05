@@ -74,7 +74,9 @@ class RiskManager:
         if current_qty == 0 or (current_qty > 0) == (signed_qty > 0):
             gross_qty = abs(current_qty) + abs(signed_qty)
             weighted_cost = (abs(current_qty) * prev_avg) + (abs(signed_qty) * fill.price)
-            self.state.avg_cost[fill.symbol] = weighted_cost / gross_qty if gross_qty else fill.price
+            self.state.avg_cost[fill.symbol] = (
+                weighted_cost / gross_qty if gross_qty else fill.price
+            )
         else:
             closing_qty = min(abs(current_qty), abs(signed_qty))
             if current_qty > 0:
@@ -88,9 +90,9 @@ class RiskManager:
                 self.state.avg_cost[fill.symbol] = fill.price
 
         self.state.positions[fill.symbol] = next_qty
-        self.state.strategy_notional[strategy_id] = self.state.strategy_notional.get(strategy_id, 0.0) + (
-            abs(fill.price * fill.quantity)
+        current_notional = self.state.strategy_notional.get(strategy_id, 0.0)
+        self.state.strategy_notional[strategy_id] = current_notional + abs(
+            fill.price * fill.quantity
         )
         if self.state.realized_pnl <= -abs(self.limits.max_daily_drawdown):
             self.state.halted = True
-

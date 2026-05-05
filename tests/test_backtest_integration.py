@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from multi_layer_trading_lab.backtest.engine import EventDrivenBacktester
@@ -22,7 +22,7 @@ class StaticMarketDataAdapter(MarketDataAdapter):
 
 
 def test_event_driven_backtest_generates_fills_and_execution_log(tmp_path: Path) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     quote = Quote(
         symbol="0700.HK",
         timestamp=now,
@@ -63,7 +63,9 @@ def test_event_driven_backtest_generates_fills_and_execution_log(tmp_path: Path)
         ),
     ]
 
-    result = EventDrivenBacktester(market_data=market_data, order_manager=order_manager).run(signals=signals)
+    result = EventDrivenBacktester(market_data=market_data, order_manager=order_manager).run(
+        signals=signals
+    )
 
     assert result.metrics is not None
     assert result.metrics.fills == 2

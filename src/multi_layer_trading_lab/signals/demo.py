@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -19,7 +19,7 @@ def build_demo_signals(daily_features: pl.DataFrame, l2_features: pl.DataFrame) 
     )
     posterior = update_hit_rate(merged["setup_hit"].to_list())
     budget = kelly_fraction(posterior.mean, payoff_ratio=1.5)
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     return merged.filter(pl.col("setup_hit") == 1).select(
         [
             pl.col("symbol"),

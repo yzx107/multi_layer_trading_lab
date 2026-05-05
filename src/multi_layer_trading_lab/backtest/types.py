@@ -1,27 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 
-class Side(str, Enum):
+class Side(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
 
 
-class TimeInForce(str, Enum):
+class TimeInForce(StrEnum):
     DAY = "DAY"
     IOC = "IOC"
 
 
-class ExecutionMode(str, Enum):
+class ExecutionMode(StrEnum):
     DRY_RUN = "dry_run"
     PAPER = "paper"
     LIVE = "live"
@@ -101,7 +101,7 @@ class ExecutionLogRecord:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "event_time": self.event_time.astimezone(timezone.utc).isoformat(),
+            "event_time": self.event_time.astimezone(UTC).isoformat(),
             "order_id": self.order_id,
             "symbol": self.symbol,
             "side": self.side,
@@ -117,4 +117,3 @@ class ExecutionLogRecord:
             "broker_order_id": self.broker_order_id,
             "notes": self.notes,
         }
-

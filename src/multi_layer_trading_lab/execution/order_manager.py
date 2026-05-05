@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from multi_layer_trading_lab.backtest.types import ExecutionLogRecord, Order, SignalEvent
@@ -30,7 +30,7 @@ class OrderManager:
     def create_order_from_signal(self, signal: SignalEvent, now: datetime) -> Order:
         return Order(
             order_id=f"ord-{uuid4().hex[:12]}",
-            created_at=now.astimezone(timezone.utc),
+            created_at=now.astimezone(UTC),
             symbol=signal.symbol,
             side=signal.side,
             quantity=signal.quantity,
@@ -42,7 +42,12 @@ class OrderManager:
             metadata=dict(signal.metadata),
         )
 
-    def submit_signal(self, signal: SignalEvent, now: datetime, quote: Quote | None) -> ManagedOrderResult:
+    def submit_signal(
+        self,
+        signal: SignalEvent,
+        now: datetime,
+        quote: Quote | None,
+    ) -> ManagedOrderResult:
         approved, reason = self.risk_manager.validate_signal(signal=signal, now=now, quote=quote)
         order = self.create_order_from_signal(signal, now=now)
         if not approved:
@@ -65,7 +70,12 @@ class OrderManager:
                 )
             )
             return ManagedOrderResult(
-                order_result=OrderResult(accepted=False, status="rejected", order=order, reason=reason),
+                order_result=OrderResult(
+                    accepted=False,
+                    status="rejected",
+                    order=order,
+                    reason=reason,
+                ),
                 risk_reason=reason,
             )
 
@@ -93,4 +103,3 @@ class OrderManager:
         if fill:
             self.risk_manager.on_fill(fill=fill, strategy_id=order.strategy_id)
         return ManagedOrderResult(order_result=result)
-

@@ -7,7 +7,13 @@ from dataclasses import dataclass
 class IBKRBrokerClient:
     mode: str = "dry_run"
 
-    def place_order(self, symbol: str, side: str, qty: int, limit_price: float | None = None) -> dict:
+    def place_order(
+        self,
+        symbol: str,
+        side: str,
+        qty: int,
+        limit_price: float | None = None,
+    ) -> dict:
         return {
             "broker": "ibkr",
             "mode": self.mode,

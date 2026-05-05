@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC
 
 from multi_layer_trading_lab.backtest.types import Fill, SignalEvent
 from multi_layer_trading_lab.execution.interfaces import MarketDataAdapter
@@ -39,7 +39,7 @@ class EventDrivenBacktester:
         wins = 0
 
         for signal in ordered_signals:
-            now = signal.timestamp.astimezone(timezone.utc)
+            now = signal.timestamp.astimezone(UTC)
             quote = self.market_data.get_quote(signal.symbol, timestamp=now)
             managed = self.order_manager.submit_signal(signal=signal, now=now, quote=quote)
             fill = managed.order_result.fill
@@ -53,7 +53,8 @@ class EventDrivenBacktester:
             realized = self.order_manager.risk_manager.state.realized_pnl
 
             mark = quote.mid if quote else fill.price
-            unrealized = self.order_manager.risk_manager.state.positions.get(fill.symbol, 0.0) * (mark - avg_cost)
+            position = self.order_manager.risk_manager.state.positions.get(fill.symbol, 0.0)
+            unrealized = position * (mark - avg_cost)
             equity = realized + unrealized
             equity_curve.append(equity)
             if realized > equity_curve[-2]:
@@ -85,4 +86,3 @@ class EventDrivenBacktester:
             fills=len(fills),
             rejected=len(rejections),
         )
-

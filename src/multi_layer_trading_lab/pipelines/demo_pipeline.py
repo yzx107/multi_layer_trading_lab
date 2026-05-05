@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import polars as pl
 
+from multi_layer_trading_lab.adapters.l2_loader.loader import L2Loader
+from multi_layer_trading_lab.adapters.tushare.client import TushareClient
 from multi_layer_trading_lab.backtest.engine import EventDrivenBacktester
 from multi_layer_trading_lab.backtest.types import ExecutionMode, OrderType, Side, SignalEvent
 from multi_layer_trading_lab.execution.adapters import DryRunBrokerAdapter, PaperBrokerAdapter
 from multi_layer_trading_lab.execution.interfaces import MarketDataAdapter, Quote
 from multi_layer_trading_lab.execution.logging import ExecutionLogWriter
 from multi_layer_trading_lab.execution.order_manager import OrderManager
-from multi_layer_trading_lab.adapters.l2_loader.loader import L2Loader
-from multi_layer_trading_lab.adapters.tushare.client import TushareClient
 from multi_layer_trading_lab.features.daily.basic import build_daily_features
-from multi_layer_trading_lab.features.intraday.basic import build_intraday_bar_features, summarize_open_window
+from multi_layer_trading_lab.features.intraday.basic import (
+    build_intraday_bar_features,
+    summarize_open_window,
+)
 from multi_layer_trading_lab.features.l2.basic import build_l2_features
 from multi_layer_trading_lab.risk.manager import RiskLimits, RiskManager
 from multi_layer_trading_lab.settings import settings
@@ -22,7 +25,11 @@ from multi_layer_trading_lab.signals.demo import build_demo_signals
 from multi_layer_trading_lab.storage.parquet_store import DuckDBCatalog, ParquetStore
 
 
-def make_sample_l2_file(root: Path, symbol: str = "00700.HK", trade_date: str = "2026-04-01") -> Path:
+def make_sample_l2_file(
+    root: Path,
+    symbol: str = "00700.HK",
+    trade_date: str = "2026-04-01",
+) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     start = datetime(2026, 4, 1, 9, 20, 0)
     rows = []
@@ -109,7 +116,7 @@ def signal_frame_to_events(signals: pl.DataFrame, quantity: int = 100) -> list[S
     events: list[SignalEvent] = []
     for row in signals.iter_rows(named=True):
         trade_date = row["trade_date"]
-        ts = datetime.combine(trade_date, datetime.min.time(), tzinfo=timezone.utc).replace(
+        ts = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC).replace(
             hour=9, minute=35
         )
         side = Side(row["side"])
@@ -140,7 +147,10 @@ def run_demo_stack(
 ) -> dict[str, object]:
     outputs = run_data_pipeline(data_root)
     market_data = FrameMarketDataAdapter(outputs["minute_bars"])
-    log_path = execution_log_path or (data_root or settings.data_root) / "logs" / "execution_log.jsonl"
+    log_path = (
+        execution_log_path
+        or (data_root or settings.data_root) / "logs" / "execution_log.jsonl"
+    )
     risk_manager = RiskManager(
         limits=RiskLimits(
             max_position_notional=2_000_000.0,
@@ -149,7 +159,11 @@ def run_demo_stack(
             max_open_slippage_bps=100.0,
         )
     )
-    broker = DryRunBrokerAdapter() if execution_mode == ExecutionMode.DRY_RUN.value else PaperBrokerAdapter()
+    broker = (
+        DryRunBrokerAdapter()
+        if execution_mode == ExecutionMode.DRY_RUN.value
+        else PaperBrokerAdapter()
+    )
     order_manager = OrderManager(
         broker=broker,
         risk_manager=risk_manager,

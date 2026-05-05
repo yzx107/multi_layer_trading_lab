@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC
 from uuid import uuid4
 
 from multi_layer_trading_lab.backtest.types import ExecutionMode, Fill, Order, Side
@@ -51,8 +51,11 @@ class SimulatedBrokerAdapter(BrokerAdapter):
             side=order.side,
             quantity=order.quantity,
             price=fill_price,
-            timestamp=quote.timestamp.astimezone(timezone.utc),
-            fees=self.cost_model.estimate_fees(notional, apply_stamp_duty=order.symbol.endswith((".HK", "-HK"))),
+            timestamp=quote.timestamp.astimezone(UTC),
+            fees=self.cost_model.estimate_fees(
+                notional,
+                apply_stamp_duty=order.symbol.endswith((".HK", "-HK")),
+            ),
             slippage=abs(fill_price - ref_price),
             broker_fill_id=f"{self.mode.value}-{uuid4().hex[:12]}",
         )
@@ -85,4 +88,3 @@ class FutuBrokerAdapter(DryRunBrokerAdapter):
 
 class IBKRBrokerAdapter(PaperBrokerAdapter):
     """Placeholder adapter; live API integration remains a follow-up task."""
-
