@@ -98,6 +98,8 @@ data/logs/paper_session_plan.json
 
 如果 OpenD Web UI 未启动、ticket 试图提交真实订单、或 HTTP 调用失败，命令会 fail closed，并把失败 response 写入 JSONL 方便审计。清理 kill-switch 或修好 OpenD 后，只重试这些失败 response 时使用 `--allow-failed-resubmit`；不要用它重提已经 `submitted=true` 的 ticket，成功提交过的 ticket 仍由默认幂等保护拦截。
 
+通过 `scripts/run_daily_ops.py --submit-opend-paper-simulate-tickets` 执行时，runtime / account / calendar precheck 阻断会跳过后续提交，但仍继续生成 blocker report、ops report、go-live readiness 和 objective audit。脚本最终返回非零退出码，方便 launchd 或手工执行识别当天没有收集到 paper session。
+
 如果已经生成了 OpenD response JSONL，可以先抽成 Futu broker report 形状：
 
 ```bash

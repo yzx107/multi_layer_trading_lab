@@ -1,6 +1,11 @@
+import subprocess
 from pathlib import Path
 
-from multi_layer_trading_lab.runtime.daily_ops import DailyOpsPlan, build_daily_ops_commands
+from multi_layer_trading_lab.runtime.daily_ops import (
+    DailyOpsPlan,
+    build_daily_ops_commands,
+    run_daily_ops_plan,
+)
 
 
 def test_build_daily_ops_commands_runs_report_then_readiness() -> None:
@@ -98,6 +103,52 @@ def test_build_daily_ops_commands_runs_report_then_readiness() -> None:
     assert "data/logs/ifind_ingestion_status.json" in commands[9]
     assert "--audit-path" in commands[10]
     assert "data/logs/objective_audit.json" in commands[10]
+
+
+def test_run_daily_ops_plan_writes_diagnostics_after_runtime_submission_block(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    commands_seen: list[str] = []
+
+    def fake_run(command, check, capture_output, text):
+        del check, capture_output, text
+        command_name = command[3]
+        commands_seen.append(command_name)
+        returncode = 1 if command_name == "fetch-opend-runtime-status" else 0
+        return subprocess.CompletedProcess(
+            command,
+            returncode,
+            stdout=f"{command_name}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("multi_layer_trading_lab.runtime.daily_ops.subprocess.run", fake_run)
+
+    results = run_daily_ops_plan(
+        DailyOpsPlan(
+            python_executable=".venv/bin/python",
+            lake_root=tmp_path / "lake",
+            report_path=tmp_path / "ops.md",
+            readiness_path=tmp_path / "readiness.json",
+            objective_audit_path=tmp_path / "objective.json",
+            objective_audit_report_path=tmp_path / "objective.md",
+            paper_blocker_report_path=tmp_path / "blocker.json",
+            export_opend_ticket_path=tmp_path / "tickets.jsonl",
+            opend_ticket_response_path=tmp_path / "responses.jsonl",
+            submit_opend_paper_simulate_tickets=True,
+        )
+    )
+
+    assert "fetch-opend-runtime-status" in commands_seen
+    assert "fetch-opend-account-status" not in commands_seen
+    assert "export-opend-paper-tickets" not in commands_seen
+    assert "submit-opend-paper-tickets" not in commands_seen
+    assert "paper-blocker-report" in commands_seen
+    assert "ops-report" in commands_seen
+    assert "go-live-readiness" in commands_seen
+    assert "objective-audit" in commands_seen
+    assert any(result.returncode == 1 for result in results)
 
 
 def test_build_daily_ops_commands_can_ingest_ifind_events_file() -> None:

@@ -493,7 +493,7 @@ daily ops 的 `paper-session-plan` 会默认消费 `data/logs/opend_quote_snapsh
 ```
 
 这条路径仍不会触碰 live：ticket 保持 `real=false` / `submit_real=false`，提交时只加 `paper=true`。它适合生成单日 paper 证据；晋级仍必须用合并后的 20-session evidence。
-启用 `--submit-opend-paper-simulate-tickets` 时，daily ops 会先调用 `fetch-opend-account-status` 检查 `/api/accounts`；如果没有 HK 股票模拟账户，会在提交前阻断。
+启用 `--submit-opend-paper-simulate-tickets` 时，daily ops 会先检查 OpenD runtime 和 `/api/accounts`；如果 kill-switch 已开启、OpenD 未 ready、或没有 HK 股票模拟账户，会跳过提交动作，但仍生成 blocker report / readiness / objective audit，最后以非零退出提示当天没有进入 paper 提交。
 
 `submit-opend-paper-tickets` 默认带幂等保护：如果 output response JSONL 已经存在同一个 `ticket_id`，会在本地返回 `ticket_already_submitted:<ticket_id>`，不会再次调用 OpenD。只有确知要重提同一张 ticket 时才显式加 `--allow-resubmit`。daily ops 的 paper SIMULATE 路径默认只允许重试已经失败的 response（`--allow-failed-resubmit`），例如 kill-switch 拒单后清理 kill-switch 再跑；已经有成功提交 response 的 ticket 仍会被阻断。
 

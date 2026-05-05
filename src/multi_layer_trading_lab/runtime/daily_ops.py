@@ -511,16 +511,54 @@ def run_daily_ops_plan(plan: DailyOpsPlan) -> list[subprocess.CompletedProcess[s
     if plan.paper_session_calendar_path is not None:
         plan.paper_session_calendar_path.parent.mkdir(parents=True, exist_ok=True)
     results = []
+    blocked_submission = False
     for command in build_daily_ops_commands(plan):
-        results.append(
-            subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
+        command_name = _command_name(command)
+        if blocked_submission and not _run_after_submission_block(command_name):
+            continue
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
         )
+        results.append(result)
+        if result.returncode != 0 and _blocks_submission(command):
+            blocked_submission = True
+            continue
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(
+                result.returncode,
+                command,
+                output=result.stdout,
+                stderr=result.stderr,
+            )
     return results
+
+
+def _command_name(command: list[str]) -> str:
+    return command[3] if len(command) > 3 else ""
+
+
+def _blocks_submission(command: list[str]) -> bool:
+    name = _command_name(command)
+    if name == "fetch-opend-runtime-status":
+        return "--require-order-submission-ready" in command
+    if name == "paper-session-calendar":
+        return "--require-collect-today" in command
+    if name == "fetch-opend-account-status":
+        return True
+    return False
+
+
+def _run_after_submission_block(command_name: str) -> bool:
+    return command_name in {
+        "paper-blocker-report",
+        "ops-report",
+        "go-live-readiness",
+        "objective-audit",
+        "objective-audit-report",
+    }
 
 
 def default_plan(

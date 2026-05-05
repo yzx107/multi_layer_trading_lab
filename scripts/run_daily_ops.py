@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 from multi_layer_trading_lab.runtime.daily_ops import default_plan, run_daily_ops_plan
@@ -140,8 +141,15 @@ def main() -> None:
         opend_env=args.opend_env,
         manual_live_enable=args.manual_live_enable,
     )
+    failed = False
     for result in run_daily_ops_plan(plan):
         print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        if result.returncode != 0:
+            failed = True
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
