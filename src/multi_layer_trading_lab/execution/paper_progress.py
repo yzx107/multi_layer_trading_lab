@@ -21,12 +21,14 @@ class PaperProgress:
     dry_run_rows: int
     execution_log_rows: int
     broker_report_rows: int
+    session_dates: tuple[str, ...]
     profitability_ready: bool | None
     net_pnl: float | None
     max_drawdown: float | None
     cash_drawdown: float | None
     reconciled: bool | None
     ready_for_live_review: bool
+    next_required_evidence: tuple[str, ...]
     failed_reasons: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -39,12 +41,14 @@ class PaperProgress:
             "dry_run_rows": self.dry_run_rows,
             "execution_log_rows": self.execution_log_rows,
             "broker_report_rows": self.broker_report_rows,
+            "session_dates": list(self.session_dates),
             "profitability_ready": self.profitability_ready,
             "net_pnl": self.net_pnl,
             "max_drawdown": self.max_drawdown,
             "cash_drawdown": self.cash_drawdown,
             "reconciled": self.reconciled,
             "ready_for_live_review": self.ready_for_live_review,
+            "next_required_evidence": list(self.next_required_evidence),
             "failed_reasons": list(self.failed_reasons),
         }
 
@@ -118,6 +122,15 @@ def build_paper_progress(
         and profitability_ready is True
         and not failed
     )
+    next_required_evidence = _next_required_paper_evidence(
+        ledger=ledger,
+        sessions_remaining=sessions_remaining,
+        profitability_present=profitability is not None,
+        profitability_ready=profitability_ready,
+        net_pnl=net_pnl,
+        reconciled=reconciled,
+        failed=failed,
+    )
     return PaperProgress(
         execution_log_path=execution_log_path,
         broker_report_path=broker_report_path,
@@ -127,12 +140,14 @@ def build_paper_progress(
         dry_run_rows=ledger.dry_run_rows,
         execution_log_rows=ledger.execution_log_rows,
         broker_report_rows=ledger.broker_report_rows,
+        session_dates=ledger.session_dates,
         profitability_ready=profitability_ready,
         net_pnl=net_pnl,
         max_drawdown=max_drawdown,
         cash_drawdown=cash_drawdown,
         reconciled=reconciled,
         ready_for_live_review=ready,
+        next_required_evidence=next_required_evidence,
         failed_reasons=tuple(failed),
     )
 
@@ -292,6 +307,64 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _next_required_paper_evidence(
+    *,
+    ledger: PaperSessionLedger,
+    sessions_remaining: int,
+    profitability_present: bool,
+    profitability_ready: bool | None,
+    net_pnl: float | None,
+    reconciled: bool | None,
+    failed: list[str],
+) -> tuple[str, ...]:
+    actions: list[str] = []
+    if "missing_execution_log" in failed:
+        actions.append("create_or_import_paper_execution_log")
+    if "missing_broker_report" in failed:
+        actions.append("export_futu_broker_report")
+    if "empty_execution_log" in failed:
+        actions.append("append_non_dry_run_paper_execution_rows")
+    if "empty_broker_report" in failed:
+        actions.append("append_matching_futu_broker_report_rows")
+    if ledger.dry_run_rows:
+        actions.append("remove_dry_run_rows_from_paper_evidence")
+    if _has_session_date_gap(failed):
+        actions.append("reconcile_execution_and_broker_session_dates")
+    if sessions_remaining:
+        actions.append(f"collect_{sessions_remaining}_broker_reconciled_paper_sessions")
+    if not profitability_present:
+        actions.append("build_profitability_evidence")
+    elif _has_profitability_consistency_gap(failed):
+        actions.append("refresh_profitability_evidence_from_latest_ledger")
+    if reconciled is False:
+        actions.append("reconcile_profitability_evidence_to_broker")
+    if net_pnl is not None and net_pnl <= 0:
+        actions.append("continue_until_positive_reconciled_net_pnl")
+    if profitability_ready is False and "net_pnl_not_positive" not in failed:
+        actions.append("resolve_profitability_evidence_failures")
+    return tuple(dict.fromkeys(actions))
+
+
+def _has_session_date_gap(failed: list[str]) -> bool:
+    return any(
+        reason in failed
+        for reason in (
+            "missing_execution_session_dates",
+            "missing_broker_session_dates",
+            "missing_broker_backed_session_dates",
+            "execution_session_dates_missing_broker_report",
+            "broker_session_dates_missing_execution_log",
+        )
+    )
+
+
+def _has_profitability_consistency_gap(failed: list[str]) -> bool:
+    return any(
+        reason.startswith("profitability_") or reason.startswith("missing_profitability_")
+        for reason in failed
+    )
 
 
 def _coerce_date(value: date | str | None) -> date:

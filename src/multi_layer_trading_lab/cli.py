@@ -1496,6 +1496,8 @@ def paper_progress(
     if progress.reconciled is not None:
         typer.echo(f"reconciled={str(progress.reconciled).lower()}")
     typer.echo(f"paper_progress={output_path}")
+    if progress.next_required_evidence:
+        typer.echo(f"next_required_evidence={','.join(progress.next_required_evidence)}")
     if progress.failed_reasons:
         typer.echo(f"failed_reasons={','.join(progress.failed_reasons)}")
 

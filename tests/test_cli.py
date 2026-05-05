@@ -2593,9 +2593,20 @@ def test_paper_progress_cli_writes_progress_report(tmp_path) -> None:
     assert "sessions_remaining=19" in result.output
     assert "net_pnl=-25.00" in result.output
     assert "cash_drawdown=-800.00" in result.output
+    assert (
+        "next_required_evidence=collect_19_broker_reconciled_paper_sessions,"
+        "refresh_profitability_evidence_from_latest_ledger,"
+        "continue_until_positive_reconciled_net_pnl"
+    ) in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["sessions_remaining"] == 19
     assert report["cash_drawdown"] == -800.0
+    assert report["session_dates"] == ["2026-04-01"]
+    assert report["next_required_evidence"] == [
+        "collect_19_broker_reconciled_paper_sessions",
+        "refresh_profitability_evidence_from_latest_ledger",
+        "continue_until_positive_reconciled_net_pnl",
+    ]
 
 
 def test_paper_session_calendar_cli_writes_next_action(tmp_path) -> None:

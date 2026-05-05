@@ -69,6 +69,11 @@ def test_paper_progress_reports_remaining_sessions_and_pnl(tmp_path) -> None:
     assert progress.reconciled is True
     assert "paper_sessions_remaining" in progress.failed_reasons
     assert "net_pnl_not_positive" in progress.failed_reasons
+    assert progress.session_dates == ("2026-04-01",)
+    assert progress.next_required_evidence == (
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    )
 
 
 def test_paper_progress_can_be_ready_after_twenty_profitable_sessions(tmp_path) -> None:
@@ -125,6 +130,7 @@ def test_paper_progress_can_be_ready_after_twenty_profitable_sessions(tmp_path) 
 
     assert progress.ready_for_live_review is True
     assert progress.sessions_remaining == 0
+    assert progress.next_required_evidence == ()
     assert progress.failed_reasons == ()
 
 
@@ -178,6 +184,9 @@ def test_paper_progress_blocks_stale_profitability_session_count(tmp_path) -> No
     assert "profitability_session_dates_mismatch" in progress.failed_reasons
     assert "profitability_execution_log_rows_mismatch" in progress.failed_reasons
     assert "profitability_broker_report_rows_mismatch" in progress.failed_reasons
+    assert "refresh_profitability_evidence_from_latest_ledger" in (
+        progress.next_required_evidence
+    )
 
 
 def test_paper_session_calendar_waits_after_today_session(tmp_path) -> None:
