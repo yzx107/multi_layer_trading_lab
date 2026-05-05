@@ -112,6 +112,12 @@ def _opend_runtime_ready(
         evidence["ticket_response_rows"] = len(response_rows)
         if not response_rows:
             failed.append("empty_opend_ticket_response")
+        submitted_rows = sum(1 for row in response_rows if _ticket_response_submitted(row))
+        failed_rows = sum(1 for row in response_rows if _ticket_response_failed(row))
+        evidence["submitted_ticket_response_rows"] = submitted_rows
+        evidence["failed_ticket_response_rows"] = failed_rows
+        if response_rows and submitted_rows == 0:
+            failed.append("missing_submitted_opend_ticket_response")
 
     if paper_simulate_status_path is not None and paper_simulate_status_path.exists():
         paper_status = _load_json(paper_simulate_status_path)
@@ -140,6 +146,16 @@ def _load_jsonl(path: Path) -> list[dict[str, object]]:
             if isinstance(payload, dict):
                 rows.append(payload)
     return rows
+
+
+def _ticket_response_submitted(row: dict[str, object]) -> bool:
+    response = row.get("response")
+    return isinstance(response, dict) and response.get("submitted") is True
+
+
+def _ticket_response_failed(row: dict[str, object]) -> bool:
+    response = row.get("response")
+    return isinstance(response, dict) and response.get("ok") is False
 
 
 def _ifind_validation_failed_reasons(payload: dict[str, object] | None) -> list[str]:
@@ -487,7 +503,7 @@ def _success_criteria() -> list[dict[str, object]]:
             "minimum_evidence": [
                 "OpenD readiness approved for the requested mode",
                 "real quote snapshot captured",
-                "ticket response JSONL captured",
+                "submitted ticket response JSONL captured",
             ],
         },
         {
@@ -647,7 +663,8 @@ def _next_required_evidence(requirement: str) -> str:
             "with at least 20 sessions, positive net PnL, and drawdown within limits."
         ),
         "opend_execution_gate": (
-            "Capture an OpenD quote snapshot and ticket response JSONL from the execution API."
+            "Capture an OpenD quote snapshot and at least one submitted ticket response "
+            "JSONL row from the execution API."
         ),
         "hk_l2_data_reuse": (
             "Refresh Hshare verified evidence and intraday_l2_features freshness in "
