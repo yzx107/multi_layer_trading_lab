@@ -173,8 +173,20 @@ _PROGRESS_COMPLETION_ONLY_REASONS = {
     "insufficient_inferred_sessions",
     "insufficient_inferred_paper_sessions",
     "insufficient_profitable_paper_sessions",
+    "missing_profitability_broker_report_rows",
+    "missing_profitability_evidence",
+    "missing_profitability_execution_log_rows",
+    "missing_profitability_inferred_session_count",
+    "missing_profitability_paper_sessions",
+    "missing_profitability_session_dates",
     "net_pnl_not_positive",
     "paper_sessions_remaining",
+    "profitability_broker_report_rows_mismatch",
+    "profitability_execution_log_rows_mismatch",
+    "profitability_inferred_session_count_mismatch",
+    "profitability_session_count_internal_mismatch",
+    "profitability_session_count_mismatch",
+    "profitability_session_dates_mismatch",
 }
 
 

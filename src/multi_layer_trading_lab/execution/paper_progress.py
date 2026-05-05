@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from multi_layer_trading_lab.execution.session_ledger import build_paper_session_ledger
+from multi_layer_trading_lab.execution.session_ledger import (
+    PaperSessionLedger,
+    build_paper_session_ledger,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +107,7 @@ def build_paper_progress(
         max_drawdown = _optional_float(profitability.get("max_drawdown"))
         cash_drawdown = _optional_float(profitability.get("cash_drawdown"))
         reconciled = profitability.get("reconciled") is True
+        failed.extend(_profitability_consistency_failures(profitability, ledger))
         if not profitability_ready:
             failed.extend(str(reason) for reason in profitability.get("failed_reasons", []))
 
@@ -234,6 +238,58 @@ def _optional_float(value: object) -> float | None:
         return None
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _profitability_consistency_failures(
+    profitability: dict[str, object],
+    ledger: PaperSessionLedger,
+) -> list[str]:
+    failed: list[str] = []
+    paper_sessions = _optional_int(profitability.get("paper_sessions"))
+    inferred_sessions = _optional_int(profitability.get("inferred_session_count"))
+    if paper_sessions is None:
+        failed.append("missing_profitability_paper_sessions")
+    elif paper_sessions != ledger.inferred_session_count:
+        failed.append("profitability_session_count_mismatch")
+    if inferred_sessions is None:
+        failed.append("missing_profitability_inferred_session_count")
+    elif inferred_sessions != ledger.inferred_session_count:
+        failed.append("profitability_inferred_session_count_mismatch")
+    if (
+        paper_sessions is not None
+        and inferred_sessions is not None
+        and paper_sessions != inferred_sessions
+    ):
+        failed.append("profitability_session_count_internal_mismatch")
+
+    session_dates = profitability.get("session_dates")
+    if not isinstance(session_dates, list):
+        failed.append("missing_profitability_session_dates")
+    else:
+        profitability_dates = tuple(sorted(str(item) for item in session_dates))
+        if profitability_dates != ledger.session_dates:
+            failed.append("profitability_session_dates_mismatch")
+
+    execution_rows = _optional_int(profitability.get("execution_log_rows"))
+    broker_rows = _optional_int(profitability.get("broker_report_rows"))
+    if execution_rows is None:
+        failed.append("missing_profitability_execution_log_rows")
+    elif execution_rows != ledger.execution_log_rows:
+        failed.append("profitability_execution_log_rows_mismatch")
+    if broker_rows is None:
+        failed.append("missing_profitability_broker_report_rows")
+    elif broker_rows != ledger.broker_report_rows:
+        failed.append("profitability_broker_report_rows_mismatch")
+    return failed
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 

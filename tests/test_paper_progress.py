@@ -38,6 +38,11 @@ def test_paper_progress_reports_remaining_sessions_and_pnl(tmp_path) -> None:
         json.dumps(
             {
                 "ready": False,
+                "paper_sessions": 1,
+                "inferred_session_count": 1,
+                "session_dates": ["2026-04-01"],
+                "execution_log_rows": 1,
+                "broker_report_rows": 1,
                 "net_pnl": -25.0,
                 "max_drawdown": -100.0,
                 "cash_drawdown": -800.0,
@@ -97,6 +102,11 @@ def test_paper_progress_can_be_ready_after_twenty_profitable_sessions(tmp_path) 
         json.dumps(
             {
                 "ready": True,
+                "paper_sessions": 20,
+                "inferred_session_count": 20,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 21)],
+                "execution_log_rows": 20,
+                "broker_report_rows": 20,
                 "net_pnl": 100.0,
                 "max_drawdown": -50.0,
                 "reconciled": True,
@@ -116,6 +126,58 @@ def test_paper_progress_can_be_ready_after_twenty_profitable_sessions(tmp_path) 
     assert progress.ready_for_live_review is True
     assert progress.sessions_remaining == 0
     assert progress.failed_reasons == ()
+
+
+def test_paper_progress_blocks_stale_profitability_session_count(tmp_path) -> None:
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    profitability = tmp_path / "profitability.json"
+    execution_rows = []
+    broker_rows = []
+    for day in range(1, 21):
+        trade_date = f"2026-04-{day:02d}"
+        execution_rows.append(
+            {"order_id": f"ord-{day}", "trade_date": trade_date, "dry_run": False}
+        )
+        broker_rows.append(
+            {"local_order_id": f"ord-{day}", "updated_time": f"{trade_date} 10:00:00"}
+        )
+    execution_log.write_text(
+        "\n".join(json.dumps(row) for row in execution_rows) + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(json.dumps(broker_rows), encoding="utf-8")
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": True,
+                "paper_sessions": 19,
+                "inferred_session_count": 19,
+                "session_dates": [f"2026-04-{day:02d}" for day in range(1, 20)],
+                "execution_log_rows": 19,
+                "broker_report_rows": 19,
+                "net_pnl": 100.0,
+                "max_drawdown": -50.0,
+                "reconciled": True,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    progress = build_paper_progress(
+        execution_log_path=execution_log,
+        broker_report_path=broker_report,
+        profitability_evidence_path=profitability,
+        target_sessions=20,
+    )
+
+    assert progress.ready_for_live_review is False
+    assert progress.sessions_remaining == 0
+    assert "profitability_session_count_mismatch" in progress.failed_reasons
+    assert "profitability_session_dates_mismatch" in progress.failed_reasons
+    assert "profitability_execution_log_rows_mismatch" in progress.failed_reasons
+    assert "profitability_broker_report_rows_mismatch" in progress.failed_reasons
 
 
 def test_paper_session_calendar_waits_after_today_session(tmp_path) -> None:

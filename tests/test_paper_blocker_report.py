@@ -114,6 +114,55 @@ def test_paper_blocker_report_separates_next_session_from_live_review(tmp_path) 
     assert "net_pnl_not_positive" in report.failed_reasons
 
 
+def test_paper_blocker_report_keeps_profitability_mismatch_completion_only(
+    tmp_path,
+) -> None:
+    runtime = tmp_path / "runtime.json"
+    paper_status = tmp_path / "paper_status.json"
+    calendar = tmp_path / "calendar.json"
+    progress = tmp_path / "progress.json"
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    paper_status.write_text(
+        json.dumps({"ready_for_session_collection": True}),
+        encoding="utf-8",
+    )
+    calendar.write_text(
+        json.dumps({"next_required_action": "collect_today_paper_session"}),
+        encoding="utf-8",
+    )
+    progress.write_text(
+        json.dumps(
+            {
+                "ready_for_live_review": False,
+                "sessions_remaining": 0,
+                "failed_reasons": [
+                    "profitability_session_count_mismatch",
+                    "profitability_session_dates_mismatch",
+                    "profitability_execution_log_rows_mismatch",
+                    "profitability_broker_report_rows_mismatch",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_paper_blocker_report(
+        runtime_status_path=runtime,
+        paper_simulate_status_path=paper_status,
+        paper_calendar_path=calendar,
+        paper_progress_path=progress,
+    )
+
+    assert report.ready_for_next_session is True
+    assert report.ready_for_live_review is False
+    assert report.next_required_action == "collect_today_paper_session"
+    assert report.next_session_failed_reasons == ()
+    assert "profitability_session_count_mismatch" in report.failed_reasons
+
+
 def test_paper_blocker_report_marks_stale_paper_simulate_status(tmp_path) -> None:
     runtime = tmp_path / "runtime.json"
     paper_status = tmp_path / "paper_status.json"
