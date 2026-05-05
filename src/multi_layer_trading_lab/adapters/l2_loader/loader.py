@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import polars as pl
-
 
 L2_SCHEMA = {
     "symbol": pl.String,
@@ -19,6 +19,37 @@ L2_SCHEMA = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class L2ColumnMapping:
+    symbol: str = "symbol"
+    ts: str = "ts"
+    bid_px_1: str = "bid_px_1"
+    ask_px_1: str = "ask_px_1"
+    bid_sz_1: str = "bid_sz_1"
+    ask_sz_1: str = "ask_sz_1"
+    last_px: str = "last_px"
+    last_sz: str = "last_sz"
+    side: str = "side"
+    cancel_flag: str = "cancel_flag"
+    extra_columns: dict[str, str] = field(default_factory=dict)
+
+    def as_rename_map(self) -> dict[str, str]:
+        mapping = {
+            self.symbol: "symbol",
+            self.ts: "ts",
+            self.bid_px_1: "bid_px_1",
+            self.ask_px_1: "ask_px_1",
+            self.bid_sz_1: "bid_sz_1",
+            self.ask_sz_1: "ask_sz_1",
+            self.last_px: "last_px",
+            self.last_sz: "last_sz",
+            self.side: "side",
+            self.cancel_flag: "cancel_flag",
+        }
+        mapping.update(self.extra_columns)
+        return mapping
+
+
 class L2Loader:
     def __init__(self, root: Path):
         self.root = root
@@ -32,10 +63,48 @@ class L2Loader:
             raise FileNotFoundError(path)
         return pl.read_parquet(path)
 
+    def normalize_raw_frame(
+        self,
+        frame: pl.DataFrame,
+        mapping: L2ColumnMapping | None = None,
+    ) -> pl.DataFrame:
+        column_mapping = mapping or L2ColumnMapping()
+        rename_map = column_mapping.as_rename_map()
+        required_raw_columns = set(rename_map)
+        missing = sorted(required_raw_columns.difference(frame.columns))
+        if missing:
+            raise ValueError(f"missing L2 columns: {','.join(missing)}")
+
+        normalized = frame.rename(rename_map).select(list(L2_SCHEMA))
+        ts_dtype = normalized.schema["ts"]
+        ts_expr = (
+            pl.col("ts").str.strptime(pl.Datetime, strict=False)
+            if ts_dtype == pl.String
+            else pl.col("ts").cast(pl.Datetime)
+        )
+        return normalized.with_columns(
+            [
+                pl.col("symbol").cast(pl.String),
+                ts_expr,
+                pl.col("bid_px_1").cast(pl.Float64),
+                pl.col("ask_px_1").cast(pl.Float64),
+                pl.col("bid_sz_1").cast(pl.Int64),
+                pl.col("ask_sz_1").cast(pl.Int64),
+                pl.col("last_px").cast(pl.Float64),
+                pl.col("last_sz").cast(pl.Int64),
+                pl.col("side").cast(pl.String).str.to_uppercase(),
+                pl.col("cancel_flag").cast(pl.Boolean),
+            ]
+        )
+
     def aggregate(self, frame: pl.DataFrame, bucket: str = "1m") -> pl.DataFrame:
         bucket_every = {"1s": "1s", "5s": "5s", "30s": "30s", "1m": "1m"}[bucket]
         mid = (pl.col("bid_px_1") + pl.col("ask_px_1")) / 2
-        signed_volume = pl.when(pl.col("side") == "BUY").then(pl.col("last_sz")).otherwise(-pl.col("last_sz"))
+        signed_volume = (
+            pl.when(pl.col("side") == "BUY")
+            .then(pl.col("last_sz"))
+            .otherwise(-pl.col("last_sz"))
+        )
         return (
             frame.with_columns(
                 [
@@ -53,7 +122,9 @@ class L2Loader:
                     pl.col("imbalance_raw").mean().alias("bid_ask_imbalance"),
                     pl.col("signed_volume").sum().alias("trade_direction_imbalance"),
                     pl.col("cancel_int").mean().alias("cancel_rate"),
-                    ((pl.col("ask_px_1") - pl.col("bid_px_1")) / pl.col("mid_px")).mean().alias("spread_bps"),
+                    ((pl.col("ask_px_1") - pl.col("bid_px_1")) / pl.col("mid_px"))
+                    .mean()
+                    .alias("spread_bps"),
                     (pl.col("bid_sz_1") + pl.col("ask_sz_1")).mean().alias("depth_summary"),
                 ]
             )

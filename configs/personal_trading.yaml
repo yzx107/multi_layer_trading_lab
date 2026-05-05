@@ -1,0 +1,45 @@
+profile:
+  account_equity: ${ACCOUNT_EQUITY:1000000}
+  hardware:
+    research_host: mac_mini
+    mobile_review_host: macbook_air
+    storage_layout: local_parquet_duckdb
+
+data_sources:
+  hk_l2:
+    role: microstructure_features
+    cadence: eod_or_intraday_batch
+    required_before_live: true
+  tushare:
+    role: cross_market_daily_and_minute_panel
+    cadence: daily
+    required_before_live: true
+  ifind:
+    role: event_fundamental_and_alternate_checks
+    cadence: daily
+    required_before_live: false
+  futu_opend:
+    role: market_data_and_paper_or_live_execution
+    cadence: realtime_when_session_is_active
+    required_before_live: true
+
+risk_profile:
+  max_single_name_pct: 0.08
+  max_strategy_pct: 0.20
+  max_daily_drawdown_pct: 0.01
+  max_open_slippage_bps: 35
+  max_gross_leverage: 1.0
+  default_kelly_scale: 0.125
+
+promotion_gates:
+  research_to_paper:
+    min_trades: 80
+    min_distinct_trade_dates: 20
+    require_no_lookahead_audit: true
+    require_cost_model: true
+    require_capacity_check: true
+  paper_to_live:
+    min_paper_sessions: 20
+    max_order_reject_rate: 0.02
+    require_reconciliation_clean: true
+    require_manual_live_enable: true

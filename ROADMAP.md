@@ -45,6 +45,19 @@
 - execution reconciliation
 - 开盘滑点监控与交易失真保护
 
+## v0.3.1 Personal Trader Operating Layer
+
+目标：把专业研究流程落到个人交易者可负担、可运行、可监控的形态。
+
+计划项：
+
+- 百万级账户权益的默认风险画像
+- `Mac mini` 本地研究与 runtime 运行约定
+- `MacBook Air` 监控与人工止损/停机约定
+- `Tushare / iFind / HK L2 / Futu OpenD` 数据源职责分工
+- research -> paper -> small live -> scaled live 晋级门槛
+- 日报：数据新鲜度、候选信号、风险预算、执行质量
+
 ## v0.4 Strategy Expansion
 
 目标：支持更多可复用策略模板。
@@ -76,3 +89,4 @@
 - ultra-low-latency C++ matching stack
 - 多区域云原生大集群
 - 用单一模型替代完整研究流程
+- 承诺固定收益或跳过 paper/live 晋级门槛

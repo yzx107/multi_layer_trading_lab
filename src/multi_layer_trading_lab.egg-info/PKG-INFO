@@ -13,9 +13,404 @@ Requires-Dist: pydantic-settings>=2.5.0
 Requires-Dist: typer>=0.12.5
 Requires-Dist: rich>=13.9.0
 Requires-Dist: structlog>=24.4.0
+Provides-Extra: data
+Requires-Dist: tushare>=1.4.0; extra == "data"
 Provides-Extra: dev
 Requires-Dist: black>=24.8.0; extra == "dev"
 Requires-Dist: pre-commit>=3.8.0; extra == "dev"
 Requires-Dist: pytest>=8.3.0; extra == "dev"
 Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
 Requires-Dist: ruff>=0.6.9; extra == "dev"
+
+# multi_layer_trading_lab
+
+`multi_layer_trading_lab` 是一个面向本地研究机的港股 / 美股多层研究与执行框架骨架，服务于中低频、事件驱动、港美联动以及港股开盘到日内的微观结构研究与执行优化。
+
+当前版本已经包含两条可运行链路：
+
+1. `demo execution loop`
+2. `research deepening workflow`
+
+并补充了一条面向个人交易者真实约束的产品路线：
+
+3. `personal trading operating blueprint`
+
+其中 research 这条链是本轮重点，覆盖：
+
+- contract validation
+- feature registry
+- dataset quality report
+- symbol normalization
+- horizon labeling / event outcomes
+- Bayesian posterior attachment
+- batch lead-lag / transfer entropy ranking
+- HK `OrderAdd` event microstructure feature set
+- `OrderAdd` pressure signal candidates
+- markdown research summary report
+
+## 与现有工作区的分工
+
+这个 repo 不是重新造一个港股 L2 数据底座，也不是替代已有因子工厂。工作区内已有上游能力应直接复用：
+
+- `/Users/yxin/AI_Workstation/Hshare_Lab_v2`: 港股 L2 raw / stage / DQA / verified layer 的事实源
+- `/Users/yxin/AI_Workstation/hk_factor_autoresearch`: 港股因子 contract、research card、固定 harness、gate 与 registry
+- `/Users/yxin/AI_Workstation/Ashare_Lab`: Tushare 连接与 smoke script 参考
+- `/Users/yxin/AI_Workstation/futu-opend-execution`: Futu/OpenD execution safety model 与 paper/dry-run 执行参考
+
+本项目的定位是下游组合层：消费 Hshare 的 verified 数据和因子工厂的晋级产物，在这里做 Bayesian / TE / Kelly 研究编排、百万级个人账户风控、OpenD dry-run / paper / live 审计和每日 ops readiness。
+
+详见 [EXTERNAL_REUSE_MAP.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/EXTERNAL_REUSE_MAP.md)。
+
+第一版的基础闭环仍然保留：
+
+1. 用 `Tushare` 拉取 `security_master` 与日频 / 分钟级研究数据
+2. 从本地港股 `L2 tick` 文件加载并聚合微观结构特征
+3. 将数据统一落到 `Parquet + DuckDB`
+4. 生成 `daily_features` 与 `intraday_l2_features`
+5. 基于简单规则、Bayesian setup 或 lead-lag 候选关系生成 `signal_events`
+6. 进入最小事件驱动 backtest
+7. 通过 `dry-run / paper` broker adapter 输出拟下单与 `execution_log`
+
+## 系统定位
+
+这个 repo 不是交易所直连 `HFT` 系统，也不试图伪装为超低延迟撮合基础设施。它适合：
+
+- 港股中低频与事件驱动
+- 港美联动研究
+- 港股开盘到日内的微观结构 alpha 研究
+- 持有周期以 `intraday` 到 `1-5D` 为主
+- 百万级个人账户在 `Mac mini + MacBook Air` 环境下做本地研究、paper execution 与审慎小规模 live 验证
+
+它暂时不适合：
+
+- 交易所直连低延迟 `HFT`
+- 亚毫秒级 order book replay
+- 复杂多账户 OMS/EMS
+- 生产级高可用容灾与风控编排
+
+## 数据源分工
+
+### Tushare
+
+用于研究底座与广覆盖面板数据：
+
+- `A-share / HK / US` 基础证券信息
+- 日线、分钟线、资金流、板块、事件
+- 日频与分钟频横截面特征
+
+### 港股 L2 Tick 历史数据
+
+用于港股微观结构研究：
+
+- order book / tick trade / opening auction 相关行为
+- bid-ask imbalance、trade imbalance、order cancellation proxy
+- 开盘前后 `1s / 5s / 30s / 1m` 聚合特征
+
+### Futu OpenD / OpenAPI
+
+用于港股实时行情与执行：
+
+- 行情订阅
+- order book / tick 订阅
+- paper / dry-run / live adapter 抽象
+
+### IBKR
+
+用于美股与备份执行通道：
+
+- 美股常规下单
+- 另一条 paper / live 执行通道
+
+## 当前 v1 支持与边界
+
+### v1 已支持的设计目标
+
+- 单 repo、清晰分层
+- 本地优先的 `Parquet + DuckDB` 研究存储
+- contract-first 的逻辑表定义
+- adapter / feature / model / execution 分离
+- 研究与执行解耦
+- dry-run / paper / live 三态接口规划
+- feature lineage、signal log、execution log 的观测设计
+- 研究侧 `contract validation + quality report + feature registry`
+- `symbol normalization + horizon labeling + event outcome extraction`
+- `Bayesian posterior` 和 `lead-lag` 批量扫描
+- `research_summary.md` 报告产出
+
+### v1 预计只做最小实现的部分
+
+- `transfer entropy` 先提供基础实现或 placeholder
+- `Futu / IBKR` 先落接口与 dry-run demo，不强依赖真实凭证
+- 风控先覆盖关键约束，不追求完整 OMS/EMS
+
+## 目录说明
+
+核心结构按功能与可扩展性拆分：
+
+- `configs/`: 环境、存储、策略、broker、风控样例配置
+- `data_contracts/`: 核心逻辑表 schema 与 lineage 文档
+- `src/`: adapters、storage、features、models、signals、backtest、execution、risk
+- `scripts/`: CLI 和运维脚本入口
+- `tests/`: contract、feature、model、backtest、adapter smoke tests
+
+## 从研究走到执行
+
+建议流程如下：
+
+1. 初始化环境变量与本地目录
+2. 拉取 `security_master`、日线、分钟线样本
+3. 导入一个交易日的港股 `L2` 样本并聚合
+4. 生成 `daily_features`、`intraday_l2_features`
+5. 运行一个 baseline signal pipeline
+6. 进入 backtest 验证收益、换手、回撤、hit ratio
+7. 使用统一 `BrokerAdapter` 切到 `dry-run` 或 `paper`
+8. 将拟订单、成交、风控快照写入执行表
+
+如果只做 research、暂不碰交易模块，现在也可以单独跑：
+
+1. 生成 contract-aligned `security_master / daily_features / intraday_l2_features`
+2. 做 `quality + validation`
+3. 生成 `feature_registry`
+4. 跑 `horizon labels / Bayesian posterior / lead-lag`
+5. 输出 `research_summary.md`
+
+## 配置与凭证
+
+所有凭证都从环境变量读取，禁止硬编码：
+
+- `TUSHARE_TOKEN`
+- `FUTU_HOST`, `FUTU_PORT`
+- `IBKR_HOST`, `IBKR_PORT`, `IBKR_CLIENT_ID`
+
+参考 [.env.example](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/.env.example) 与 `configs/` 下的样例文件。
+
+## 技术栈
+
+- Python `3.11+`
+- `pyproject.toml`
+- `uv` 优先，兼容 `pip`
+- `polars`, `duckdb`, `pyarrow`
+- `typer`
+- `pydantic-settings`
+- `pytest`
+- `structlog`
+- `ruff`, `black`, `pre-commit`
+
+## 开发原则
+
+- 先立 `contract`，再写 storage / feature / backtest / execution
+- 不过度工程化，但保留清晰扩展边界
+- 不把 tick 原始流直接当最终信号输入，必须经聚合特征层
+- `lead-lag / transfer entropy` 只用于发现候选信息流，不是因果证明器
+- `Bayesian update` 用于动态更新 setup 胜率
+- `Kelly` 只作为仓位上限与风险预算，不是机械下单器
+
+## 配套文档
+
+- [ARCHITECTURE.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/ARCHITECTURE.md)
+- [ROADMAP.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/ROADMAP.md)
+- [TASKS.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/TASKS.md)
+- [CHANGELOG.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/CHANGELOG.md)
+- [data_contracts/README.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data_contracts/README.md)
+- [PERSONAL_TRADING_BLUEPRINT.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/PERSONAL_TRADING_BLUEPRINT.md)
+
+## 快速运行
+
+安装依赖：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+```
+
+运行 research demo：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli research-demo
+.venv/bin/python -m multi_layer_trading_lab.cli validate-research
+```
+
+拉取 Tushare 数据到 lake：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli fetch-tushare-to-lake --lake-root data/lake
+```
+
+默认不会因为存在 token 就自动联网；真实 Tushare Pro 路径需要显式打开：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli fetch-tushare-to-lake \
+  --lake-root data/lake \
+  --symbols 600519.SH,000001.SZ \
+  --use-real
+```
+
+当前真实 Tushare 路径只覆盖 A 股 `stock_basic` 和 `daily`，因此 readiness 中标记为 `partial_real_adapter`，还不能解锁 go-live。
+
+拉取 iFind 事件数据到 lake：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli fetch-ifind-to-lake --lake-root data/lake
+```
+
+查看个人账户风控预检：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli risk-precheck --account-equity 1000000
+```
+
+检查当前项目是否能复用 Hshare Lab 和因子工厂：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli external-repo-precheck
+.venv/bin/python -m multi_layer_trading_lab.cli research-input-manifest \
+  --output-path data/logs/research_input_manifest.json
+.venv/bin/python -m multi_layer_trading_lab.cli factor-factory-summary --lake-root data/lake
+```
+
+查看 Futu OpenD 执行前检查：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli opend-precheck --mode paper --env SIMULATE
+.venv/bin/python -m multi_layer_trading_lab.cli reconcile-futu-report data/logs/execution_log.jsonl /path/to/futu_order_report.json
+.venv/bin/python -m multi_layer_trading_lab.cli paper-audit data/logs/execution_log.jsonl /path/to/futu_order_report.json --paper-sessions 20
+.venv/bin/python -m multi_layer_trading_lab.cli paper-evidence \
+  --execution-log-path data/logs/execution_log.jsonl \
+  --broker-report-path data/logs/futu_order_report.json \
+  --paper-sessions 20
+```
+
+查看真实数据源凭证检查：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli data-source-precheck
+.venv/bin/python -m multi_layer_trading_lab.cli data-adapter-status
+```
+
+`data-source-precheck` 只说明凭证是否存在；`data-adapter-status` 额外说明当前是否已经是真实 adapter。当前 Tushare 是 `partial_real_adapter`，iFind 仍是 `stub_adapter`，所以不会解锁 go-live。
+
+生成本地运行日报：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli ops-report --output-path data/logs/ops_daily_report.md
+```
+
+生成机器可读的上线总闸门 manifest：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli go-live-readiness \
+  --output-path data/logs/go_live_readiness.json \
+  --lake-root data/lake \
+  --opend-mode paper \
+  --opend-env SIMULATE
+```
+
+该命令会汇总账户风险预算、Tushare/iFind 凭证、核心 lake 数据新鲜度、research->paper、paper->live 与 Futu OpenD 状态。默认缺少真实证据时输出 `go_live_approved=false`。
+
+Mac mini 日常运行入口：
+
+```bash
+.venv/bin/python scripts/run_daily_ops.py \
+  --lake-root data/lake \
+  --report-path data/logs/ops_daily_report.md \
+  --readiness-path data/logs/go_live_readiness.json
+```
+
+带真实 paper 执行证据运行：
+
+```bash
+.venv/bin/python scripts/run_daily_ops.py \
+  --lake-root data/lake \
+  --report-path data/logs/ops_daily_report.md \
+  --readiness-path data/logs/go_live_readiness.json \
+  --execution-log-path data/logs/execution_log.jsonl \
+  --broker-report-path data/logs/futu_order_report.json \
+  --paper-sessions 20
+```
+
+paper 执行流程见 [PAPER_TRADING_RUNBOOK.md](/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/PAPER_TRADING_RUNBOOK.md)。
+
+生成 macOS `launchd` 定时任务配置：
+
+```bash
+.venv/bin/python scripts/render_launchd_plist.py \
+  --output-path configs/launchd/com.yxin.mttl.daily-ops.plist \
+  --hour 18 \
+  --minute 30
+```
+
+生成后可先检查 plist，再按需复制到 `~/Library/LaunchAgents/` 并用 `launchctl` 加载。默认只生成配置文件，不直接安装到系统目录。
+
+检查 research 是否允许进入 paper：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli research-audit --lake-root data/lake
+```
+
+校准真实港股 L2 样本字段：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli profile-l2-sample /path/to/l2_sample.parquet
+.venv/bin/python -m multi_layer_trading_lab.cli profile-l2-sample /path/to/l2_sample.parquet --mapping-output configs/l2_mapping.json
+.venv/bin/python -m multi_layer_trading_lab.cli import-l2-sample /path/to/l2_sample.parquet configs/l2_mapping.json --lake-root data/lake
+.venv/bin/python -m multi_layer_trading_lab.cli build-l2-features-from-lake --lake-root data/lake
+```
+
+查看并导入真实港股 Tick zip 中的 `OrderAdd` 事件：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli profile-l2-zip /Volumes/Data/港股Tick数据/2025/20250123.zip --category OrderAdd
+.venv/bin/python -m multi_layer_trading_lab.cli import-l2-zip-order-add /Volumes/Data/港股Tick数据/2025/20250123.zip \
+  --member 20250123/OrderAdd/00001.csv \
+  --lake-root data/lake
+.venv/bin/python -m multi_layer_trading_lab.cli build-l2-order-add-features-from-lake --lake-root data/lake
+.venv/bin/python -m multi_layer_trading_lab.cli build-order-add-signals-from-lake --lake-root data/lake
+.venv/bin/python -m multi_layer_trading_lab.cli backtest-order-add-signals-from-lake --lake-root data/lake
+.venv/bin/python -m multi_layer_trading_lab.cli sweep-order-add-thresholds-from-lake --lake-root data/lake --planned-notional 8000
+.venv/bin/python -m multi_layer_trading_lab.cli order-add-research-gate --lake-root data/lake --account-equity 1000000
+```
+
+`OrderAdd` 是订单簿事件，不是一档 bid/ask 快照；当前会先标准化写入 `raw_l2_order_add`，再聚合为 `l2_order_add_features`，用于新增委托强度、量、价格层级与大单比例研究。
+`sweep-order-add-thresholds-from-lake` 用 `planned-notional` 表示实际计划下单名义金额；`order-add-research-gate` 会同时检查最佳阈值组合的交易数、成本后收益和个人账户容量约束。
+
+多日批量导入可以用逗号分隔 zip 路径：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli import-l2-zip-order-add-batch \
+  /Volumes/Data/港股Tick数据/2025/20250123.zip,/Volumes/Data/港股Tick数据/2025/20250124.zip \
+  --symbols 00001.HK \
+  --lake-root data/lake
+```
+
+也可以按日期区间自动发现 zip：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli discover-l2-zips \
+  --raw-root /Volumes/Data/港股Tick数据 \
+  --start 2025-01-20 \
+  --end 2025-01-24
+.venv/bin/python -m multi_layer_trading_lab.cli check-l2-order-add-coverage \
+  --raw-root /Volumes/Data/港股Tick数据 \
+  --start 2025-01-20 \
+  --end 2025-01-24 \
+  --symbols 00001.HK,00005.HK,00700.HK \
+  --output-path data/logs/order_add_coverage.csv
+.venv/bin/python -m multi_layer_trading_lab.cli import-l2-zip-order-add-range \
+  --raw-root /Volumes/Data/港股Tick数据 \
+  --start 2025-01-20 \
+  --end 2025-01-24 \
+  --symbols 00001.HK \
+  --lake-root data/lake
+```
+
+或直接运行脚本：
+
+```bash
+.venv/bin/python scripts/run_research_demo.py
+```
+
+运行测试：
+
+```bash
+.venv/bin/python -m pytest
+```

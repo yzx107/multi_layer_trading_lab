@@ -9,12 +9,22 @@
 - 本地优先，适合 `Mac mini / MacBook`
 - 能从研究平滑走到 `dry-run / paper / live`
 - 第一版保留最小闭环，不为了“平台感”过度抽象
+- 以百万级个人账户、`Mac mini / MacBook Air`、港股 L2 / Tushare / iFind / Futu OpenD 为现实边界
 
 ## 分层概览
 
+### 0. External Reuse Layer
+
+工作区已有两个上游事实源，本项目默认只读复用：
+
+- `Hshare_Lab_v2`: 拥有港股 L2 raw / stage / DQA / verified layer
+- `hk_factor_autoresearch`: 拥有因子 contract、research card、固定 harness、gate 和 registry
+
+本 repo 不重定义 Hshare 的 stage/verified contract，也不绕过因子工厂 harness 重新写普通因子实验。这里接入它们的产物后，继续做 Bayesian / TE / Kelly 排序、组合风控、执行审计和 ops readiness。
+
 ### 1. Ingestion Layer
 
-负责从外部数据源读取原始数据并标准化。
+负责从外部数据源读取原始数据并标准化。对港股 L2 历史数据，正式研究入口优先使用 Hshare Lab v2 的 verified layer；本 repo 内的 L2 loader 只保留为样本 profile、轻量 smoke 和临时适配工具。
 
 - `TushareAdapter`
 - `L2Loader`
@@ -109,22 +119,24 @@
 - `risk_snapshots`
 - `feature_registry`
 
+个人账户默认风险画像由 `PersonalAccountProfile` 提供，基于账户权益推导单票、策略、日内亏损和滑点阈值。默认 `1,000,000` 账户权益下使用 `8%` 单票上限、`20%` 单策略上限、`1%` 日内亏损熔断和 `1/8 Kelly` 仓位缩放。
+
 ## 逻辑数据流
 
 ```text
-Tushare / L2 files / Futu / IBKR
+Hshare verified / factor factory registry / Tushare / iFind / Futu / IBKR
         ↓
-   adapters / loaders
+ external repo adapters / source adapters
         ↓
-  parquet staging datasets
+ reusable inputs / parquet staging datasets
         ↓
- standardized logical tables
+ standardized research input manifest
         ↓
-     feature factories
+ Bayesian / TE / Kelly research orchestration
         ↓
-  daily_features / intraday_l2_features
+ candidate portfolio / risk budgets
         ↓
-    models + signal rules
+ promotion gates + signal rules
         ↓
       signal_events
         ↓
@@ -152,12 +164,13 @@ orders / fills / execution_log / positions
 
 ### Tick 与 Feature 边界
 
-raw `L2 tick` 只用于：
+Hshare Lab v2 是港股 L2 raw / stage / DQA / verified 的事实源。当前 repo 内的 raw `L2 tick` 处理只用于：
 
 - 重建聚合桶
 - 生成微观结构摘要特征
+- 样本级 schema profile 和 smoke 验证
 
-信号模型默认消费 `intraday_l2_features`，而不是直接消费原始 tick。
+正式研究信号默认消费 Hshare verified layer 或因子工厂晋级产物，而不是直接消费原始 tick。
 
 ### Kelly 定位
 
@@ -209,6 +222,7 @@ duckdb/
 - `storage.yaml`
 - `brokers.yaml`
 - `risk.yaml`
+- `personal_trading.yaml`
 - `research.yaml`
 - `contracts.yaml`
 

@@ -1,0 +1,601 @@
+from __future__ import annotations
+
+import json
+
+from multi_layer_trading_lab.reports.objective_audit import (
+    ObjectiveAuditInput,
+    build_objective_audit,
+    render_objective_audit_report,
+)
+
+
+def test_objective_audit_blocks_without_profitability_and_live_adapters(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    ifind_validation = tmp_path / "ifind_validation.json"
+    ifind_ingestion = tmp_path / "ifind_ingestion.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "partial_real_adapter",
+                        "live_data_ready": False,
+                    },
+                    {
+                        "source": "ifind",
+                        "adapter_status": "stub_adapter",
+                        "live_data_ready": False,
+                    },
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    ifind_validation.write_text(
+        json.dumps(
+            {
+                "valid": False,
+                "rows": 0,
+                "failed_reasons": ["ifind_file_validate_failed:ValueError"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ifind_ingestion.write_text(
+        json.dumps(
+            {
+                "ready": False,
+                "ifind_stub_rows": 2,
+                "ifind_real_rows": 0,
+                "ifind_real_file_rows": 0,
+                "failed_reasons": ["missing_real_ifind_lake_rows"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            ifind_validation_report_path=ifind_validation,
+            ifind_ingestion_status_path=ifind_ingestion,
+        )
+    )
+
+    assert audit["objective_achieved"] is False
+    assert "tushare_real_data_adapter" in audit["blocked_requirements"]
+    assert "ifind_real_data_adapter" in audit["blocked_requirements"]
+    assert "opend_execution_gate" in audit["blocked_requirements"]
+    assert "paper_to_live_execution_evidence" in audit["blocked_requirements"]
+    assert "profitable_reconciled_paper_or_live_evidence" in audit["blocked_requirements"]
+    assert audit["completion_decision"]["status"] == "not_achieved"
+    assert len(audit["prompt_to_artifact_checklist"]) == 8
+    ifind_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "ifind_real_data_adapter"
+    ][0]
+    assert "import-ifind-events-file" in ifind_item["verification_command"]
+    assert str(ifind_validation) in ifind_item["artifacts"]
+    assert str(ifind_ingestion) in ifind_item["artifacts"]
+    assert "data/lake/ifind_events" in ifind_item["artifacts"]
+    ifind_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "ifind_real_data_adapter"
+    ][0]
+    assert "ifind_stub_adapter" in ifind_check["failed_reasons"]
+    assert "ifind_file_validate_failed:ValueError" in ifind_check["failed_reasons"]
+    assert ifind_check["evidence"]["ingestion_status"]["ifind_stub_rows"] == 2
+    assert output.exists()
+
+
+def test_objective_audit_marks_missing_ifind_validation_report(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    ifind_validation = tmp_path / "missing_ifind_validation.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            ifind_validation_report_path=ifind_validation,
+        )
+    )
+    ifind_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "ifind_real_data_adapter"
+    ][0]
+
+    assert "missing_ifind_validation_report" in ifind_check["failed_reasons"]
+    assert ifind_check["evidence"]["validation_report"]["report_path"] == str(ifind_validation)
+
+
+def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":false}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+        )
+    )
+
+    assert audit["objective_achieved"] is True
+    assert audit["blocked_requirements"] == []
+    assert audit["completion_decision"]["status"] == "achieved"
+    assert all(item["status"] == "passed" for item in audit["prompt_to_artifact_checklist"])
+
+
+def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": False,
+                "paper_sessions": 20,
+                "net_pnl": 0.0,
+                "max_drawdown": -10.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+                "failed_reasons": [
+                    "dry_run_execution_log_not_real_paper",
+                    "net_pnl_not_positive",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":false}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+        )
+    )
+    profit_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "dry_run_execution_log_not_real_paper" in profit_check["failed_reasons"]
+    assert profit_check["failed_reasons"].count("net_pnl_not_positive") == 1
+
+
+def test_objective_audit_report_renders_blockers_and_next_evidence(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "stub_adapter", "live_data_ready": False},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(readiness_manifest_path=readiness, output_path=output)
+    )
+    report = render_objective_audit_report(audit)
+
+    assert "# Objective Completion Audit" in report
+    assert "Status: not_achieved" in report
+    assert "ifind_real_data_adapter" in report
+    assert "import-ifind-events-file" in report
+    assert "profitable_reconciled_paper_or_live_evidence" in report
+
+
+def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "opend_execution_gate" in audit["blocked_requirements"]
+    assert "missing_opend_runtime_status" in opend_check["failed_reasons"]
+    assert "missing_opend_quote_snapshot" in opend_check["failed_reasons"]
+    assert "missing_opend_ticket_response" in opend_check["failed_reasons"]
+
+
+def test_objective_audit_blocks_opend_kill_switch_runtime_status(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":false}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps(
+            {
+                "ready_for_order_submission": False,
+                "kill_switch": True,
+                "failed_reasons": ["opend_kill_switch_enabled"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "opend_execution_gate" in audit["blocked_requirements"]
+    assert "opend_kill_switch_enabled" in opend_check["failed_reasons"]
+    assert opend_check["evidence"]["runtime"]["runtime_status"]["kill_switch"] is True
+
+
+def test_objective_audit_uses_paper_simulate_status_failed_reasons(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    paper_status = tmp_path / "paper_status.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":false}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    paper_status.write_text(
+        json.dumps(
+            {
+                "ready_for_session_collection": False,
+                "failed_reasons": ["missing_submitted_responses"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            paper_simulate_status_path=paper_status,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "missing_submitted_responses" in opend_check["failed_reasons"]

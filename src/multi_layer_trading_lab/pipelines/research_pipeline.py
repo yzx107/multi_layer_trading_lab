@@ -17,6 +17,7 @@ from multi_layer_trading_lab.features.l2.basic import (
     build_l2_bucket_features,
     summarize_l2_bucket_features,
 )
+from multi_layer_trading_lab.features.l2.order_add import build_order_add_bucket_features
 from multi_layer_trading_lab.labels import (
     add_horizon_labels,
     extract_event_outcomes,
@@ -30,6 +31,10 @@ from multi_layer_trading_lab.models import (
 from multi_layer_trading_lab.pipelines.demo_pipeline import make_sample_l2_file
 from multi_layer_trading_lab.reports import render_research_summary
 from multi_layer_trading_lab.settings import settings
+from multi_layer_trading_lab.signals.order_add import (
+    build_order_add_signal_candidates,
+    order_add_candidates_to_signal_events,
+)
 from multi_layer_trading_lab.storage import (
     DuckDBCatalog,
     FeatureSetSpec,
@@ -91,6 +96,52 @@ def _build_signal_contract_frame(panel: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _make_sample_order_add_events(symbol: str, trade_date: date) -> pl.DataFrame:
+    base_ts = f"{trade_date.isoformat()} 09:"
+    return pl.DataFrame(
+        {
+            "symbol": [symbol] * 12,
+            "ts": [
+                f"{base_ts}20:06",
+                f"{base_ts}20:30",
+                f"{base_ts}21:05",
+                f"{base_ts}21:25",
+                f"{base_ts}22:10",
+                f"{base_ts}22:45",
+                f"{base_ts}30:01",
+                f"{base_ts}30:30",
+                f"{base_ts}31:05",
+                f"{base_ts}31:35",
+                f"{base_ts}32:10",
+                f"{base_ts}32:55",
+            ],
+            "trade_date": [trade_date.strftime("%Y%m%d")] * 12,
+            "seq_num": list(range(12)),
+            "order_id": [10_000 + idx for idx in range(12)],
+            "order_type": [1] * 12,
+            "ext": [110] * 12,
+            "price": [40.0, 40.1, 40.2, 40.0, 40.3, 40.4, 40.6, 40.5, 40.7, 40.8, 40.7, 40.9],
+            "volume": [
+                5_000,
+                12_000,
+                9_000,
+                20_000,
+                7_000,
+                18_000,
+                6_000,
+                11_000,
+                9_500,
+                14_000,
+                5_500,
+                8_000,
+            ],
+            "level": [0, 1, 1, 2, 0, 1, 2, 2, 1, 0, 1, 2],
+            "broker_no": [None] * 12,
+            "volume_pre": [0] * 12,
+        }
+    ).with_columns(pl.col("ts").str.strptime(pl.Datetime))
+
+
 def run_research_workflow(data_root: Path | None = None) -> dict[str, object]:
     root = data_root or settings.data_root
     store = ParquetStore(root / "lake")
@@ -147,6 +198,8 @@ def run_research_workflow(data_root: Path | None = None) -> dict[str, object]:
     l2_agg = loader.aggregate(l2_frame, "1m")
     l2_bucket_features = build_l2_bucket_features(l2_agg)
     l2_session_summary = summarize_l2_bucket_features(l2_bucket_features)
+    raw_l2_order_add = _make_sample_order_add_events("00700.HK", date(2026, 4, 1))
+    l2_order_add_features = build_order_add_bucket_features(raw_l2_order_add)
 
     hk_panel = (
         posterior_base
@@ -212,7 +265,21 @@ def run_research_workflow(data_root: Path | None = None) -> dict[str, object]:
         ],
         max_lag=3,
     ).with_columns(pl.lit("l2").alias("domain"))
-    lead_lag_summary = pl.concat([daily_lead_lag, l2_lead_lag], how="diagonal_relaxed")
+    order_add_lead_lag = batch_scan_lead_lag(
+        l2_order_add_features.select(
+            ["order_add_count", "order_add_volume", "large_order_ratio", "order_add_price_mean"]
+        ).drop_nulls(),
+        column_pairs=[
+            ("order_add_count", "order_add_price_mean"),
+            ("order_add_volume", "order_add_price_mean"),
+            ("large_order_ratio", "order_add_price_mean"),
+        ],
+        max_lag=2,
+    ).with_columns(pl.lit("l2_order_add").alias("domain"))
+    lead_lag_summary = pl.concat(
+        [daily_lead_lag, l2_lead_lag, order_add_lead_lag],
+        how="diagonal_relaxed",
+    )
 
     feature_registry = build_feature_registry(
         [
@@ -241,10 +308,25 @@ def run_research_workflow(data_root: Path | None = None) -> dict[str, object]:
                 source_tables=("l2_tick_aggregated",),
                 refresh_frequency="intraday_batch",
             ),
+            FeatureSetSpec(
+                feature_set_version="order_add_v1",
+                feature_domain="l2_order_add",
+                description="Bucketed HK OrderAdd event microstructure features.",
+                feature_columns=tuple(column for column in l2_order_add_features.columns),
+                source_tables=("raw_l2_order_add",),
+                refresh_frequency="intraday_batch",
+            ),
         ]
     )
 
-    signal_events = _build_signal_contract_frame(posterior_panel)
+    order_add_signal_candidates = build_order_add_signal_candidates(l2_order_add_features)
+    signal_events = pl.concat(
+        [
+            _build_signal_contract_frame(posterior_panel),
+            order_add_candidates_to_signal_events(order_add_signal_candidates),
+        ],
+        how="diagonal_relaxed",
+    )
     contracts = available_contracts()
     validations = [
         validate_dataset(security_master, contracts["security_master"]),
@@ -298,6 +380,9 @@ def run_research_workflow(data_root: Path | None = None) -> dict[str, object]:
         "intraday_summary": intraday_summary,
         "intraday_l2_features": l2_bucket_features,
         "l2_session_summary": l2_session_summary,
+        "raw_l2_order_add": raw_l2_order_add,
+        "l2_order_add_features": l2_order_add_features,
+        "order_add_signal_candidates": order_add_signal_candidates,
         "posterior_panel": posterior_panel,
         "posterior_summary": posterior_summary,
         "lead_lag_summary": lead_lag_summary,

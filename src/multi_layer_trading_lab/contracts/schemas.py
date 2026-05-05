@@ -172,6 +172,27 @@ FEATURE_REGISTRY_CONTRACT = DatasetContract(
     primary_key=("feature_set_version",),
 )
 
+IFIND_EVENTS_CONTRACT = DatasetContract(
+    name="ifind_events",
+    columns=(
+        ColumnSpec("event_id", "string"),
+        ColumnSpec("security_id", "string"),
+        ColumnSpec("symbol", "string"),
+        ColumnSpec("market", "string"),
+        ColumnSpec("event_date", "date"),
+        ColumnSpec("event_ts", "datetime"),
+        ColumnSpec("event_type", "string"),
+        ColumnSpec("event_title", "string"),
+        ColumnSpec("event_source", "string"),
+        ColumnSpec("importance", "int", required=False),
+        ColumnSpec("data_source", "string"),
+        ColumnSpec("source_dataset", "string"),
+        ColumnSpec("source_run_id", "string"),
+        ColumnSpec("ingested_at", "datetime"),
+    ),
+    primary_key=("event_id",),
+)
+
 
 def available_contracts() -> dict[str, DatasetContract]:
     return {
@@ -180,4 +201,5 @@ def available_contracts() -> dict[str, DatasetContract]:
         INTRADAY_L2_FEATURES_CONTRACT.name: INTRADAY_L2_FEATURES_CONTRACT,
         SIGNAL_EVENTS_CONTRACT.name: SIGNAL_EVENTS_CONTRACT,
         FEATURE_REGISTRY_CONTRACT.name: FEATURE_REGISTRY_CONTRACT,
+        IFIND_EVENTS_CONTRACT.name: IFIND_EVENTS_CONTRACT,
     }

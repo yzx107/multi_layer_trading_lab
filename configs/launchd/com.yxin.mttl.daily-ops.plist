@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.yxin.mttl.daily-ops</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/bin/python3.14</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/scripts/run_daily_ops.py</string>
+		<string>--lake-root</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/lake</string>
+		<string>--report-path</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/ops_daily_report.md</string>
+		<string>--readiness-path</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/go_live_readiness.json</string>
+		<string>--objective-audit-path</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/objective_audit.json</string>
+		<string>--objective-audit-report-path</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/objective_audit.md</string>
+		<string>--paper-progress-path</string>
+		<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/paper_progress.json</string>
+		<string>--account-equity</string>
+		<string>1000000.00</string>
+		<string>--opend-mode</string>
+		<string>paper</string>
+		<string>--opend-env</string>
+		<string>SIMULATE</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>18</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/launchd_daily_ops.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/yxin/AI_Workstation/Bayes_TE_Kelly Trading/data/logs/launchd_daily_ops.err.log</string>
+	<key>RunAtLoad</key>
+	<false/>
+</dict>
+</plist>

@@ -16,6 +16,10 @@ research:
     hk_l2_ticks:
       enabled: true
       refresh: eod
+    ifind_events:
+      enabled: true
+      refresh: daily
+      role: event_and_fundamental_enrichment
 
   l2_aggregation_windows:
     - 1s

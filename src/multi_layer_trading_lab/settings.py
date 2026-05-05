@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     lake_root: Path = Field(default=Path("data/lake"))
     market: str = "HK"
     tushare_token: str | None = None
+    ifind_username: str | None = None
+    ifind_password: str | None = None
+    ifind_access_token: str | None = None
+    ifind_refresh_token: str | None = None
+    ifind_events_endpoint: str | None = None
     futu_host: str = "127.0.0.1"
     futu_port: int = 11111
     ibkr_host: str = "127.0.0.1"

@@ -1,0 +1,20 @@
+[hshare_lab_v2]
+repo_root = "/Users/yxin/AI_Workstation/Hshare_Lab_v2"
+data_root = "/Volumes/Data/港股Tick数据"
+stage_layer = "/Volumes/Data/港股Tick数据/candidate_cleaned"
+verified_layer = "/Volumes/Data/港股Tick数据/verified"
+
+[hk_factor_autoresearch]
+repo_root = "/Users/yxin/AI_Workstation/hk_factor_autoresearch"
+registry = "/Users/yxin/AI_Workstation/hk_factor_autoresearch/registry"
+runs = "/Users/yxin/AI_Workstation/hk_factor_autoresearch/runs"
+harness_entry = "/Users/yxin/AI_Workstation/hk_factor_autoresearch/harness/run_verified_factor.py"
+
+[tushare_reference]
+repo_root = "/Users/yxin/AI_Workstation/Ashare_Lab"
+smoke_script = "/Users/yxin/AI_Workstation/Ashare_Lab/test_tushare.py"
+
+[opend_execution]
+repo_root = "/Users/yxin/AI_Workstation/futu-opend-execution"
+setup_py = "/Users/yxin/AI_Workstation/futu-opend-execution/setup.py"
+opend_app_root = "/Users/yxin/AI_Workstation/Futu_OpenD_9.6.5618_Mac"
