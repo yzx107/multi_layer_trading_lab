@@ -26,6 +26,14 @@ def _load_json(path: Path) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _is_older_than(path: Path | None, reference_path: Path | None) -> bool:
+    if path is None or reference_path is None:
+        return False
+    if not path.exists() or not reference_path.exists():
+        return False
+    return path.stat().st_mtime < reference_path.stat().st_mtime
+
+
 def _status(approved: bool) -> str:
     return "passed" if approved else "blocked"
 
@@ -131,10 +139,20 @@ def _opend_runtime_ready(
         if response_rows and submitted_rows == 0:
             failed.append("missing_submitted_opend_ticket_response")
 
-    if paper_simulate_status_path is not None and paper_simulate_status_path.exists():
+    paper_status_stale = _is_older_than(paper_simulate_status_path, runtime_status_path)
+    if paper_status_stale:
+        failed.append("stale_paper_simulate_status")
+
+    if paper_simulate_status_path is not None and not paper_simulate_status_path.exists():
+        failed.append("missing_paper_simulate_status")
+    elif paper_simulate_status_path is not None and paper_simulate_status_path.exists():
         paper_status = _load_json(paper_simulate_status_path)
         evidence["paper_simulate_status"] = paper_status
-        if paper_status.get("ready_for_session_collection") is not True:
+        evidence["paper_simulate_status_stale"] = paper_status_stale
+        if (
+            not paper_status_stale
+            and paper_status.get("ready_for_session_collection") is not True
+        ):
             failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
 
     return not failed, evidence, list(dict.fromkeys(failed))

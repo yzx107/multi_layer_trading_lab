@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from multi_layer_trading_lab.reports.objective_audit import (
     ObjectiveAuditInput,
@@ -828,3 +829,99 @@ def test_objective_audit_uses_paper_simulate_status_failed_reasons(tmp_path) -> 
 
     assert audit["objective_achieved"] is False
     assert "missing_submitted_responses" in opend_check["failed_reasons"]
+
+
+def test_objective_audit_marks_stale_paper_simulate_status(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
+    paper_status = tmp_path / "paper_status.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":true}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    _write_ready_opend_account_status(account)
+    paper_status.write_text(
+        json.dumps(
+            {
+                "ready_for_session_collection": False,
+                "failed_reasons": ["missing_submitted_responses"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(paper_status, (1000, 1000))
+    os.utime(runtime, (2000, 2000))
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
+            paper_simulate_status_path=paper_status,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "stale_paper_simulate_status" in opend_check["failed_reasons"]
+    assert "missing_submitted_responses" not in opend_check["failed_reasons"]
+    assert opend_check["evidence"]["runtime"]["paper_simulate_status_stale"] is True
