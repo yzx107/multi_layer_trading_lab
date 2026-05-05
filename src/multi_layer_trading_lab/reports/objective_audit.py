@@ -106,6 +106,7 @@ def _opend_runtime_ready(
     account_status_path: Path | None = None,
     paper_simulate_status_path: Path | None = None,
     paper_blocker_report_path: Path | None = None,
+    paper_progress_path: Path | None = None,
 ) -> tuple[bool, dict[str, object], list[str]]:
     failed: list[str] = []
     evidence: dict[str, object] = {
@@ -198,7 +199,12 @@ def _opend_runtime_ready(
             failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
 
     blocker_ready, blocker_payload, blocker_failed = _paper_blocker_ready(
-        paper_blocker_report_path
+        paper_blocker_report_path,
+        reference_paths=(
+            runtime_status_path,
+            paper_simulate_status_path,
+            paper_progress_path,
+        ),
     )
     if blocker_payload is not None:
         evidence["paper_blocker_report"] = blocker_payload
@@ -209,13 +215,26 @@ def _opend_runtime_ready(
 
 def _paper_blocker_ready(
     path: Path | None,
+    reference_paths: tuple[Path | None, ...] = (),
 ) -> tuple[bool, dict[str, object] | None, list[str]]:
     if path is None:
         return True, None, []
     if not path.exists():
         return False, None, ["missing_paper_blocker_report"]
-    payload = _load_json(path)
+    payload = dict(_load_json(path))
     failed: list[str] = []
+    stale_reference_paths = [
+        str(reference_path)
+        for reference_path in (
+            *reference_paths,
+            *_paper_blocker_internal_reference_paths(payload),
+        )
+        if _is_older_than(path, reference_path)
+    ]
+    if stale_reference_paths:
+        payload["paper_blocker_report_stale"] = True
+        payload["stale_reference_paths"] = list(dict.fromkeys(stale_reference_paths))
+        failed.append("stale_paper_blocker_report")
     if payload.get("ready_for_next_session") is not True:
         reasons = [
             str(reason)
@@ -224,6 +243,22 @@ def _paper_blocker_ready(
         ]
         failed.extend(reasons or ["paper_next_session_not_ready"])
     return not failed, payload, list(dict.fromkeys(failed))
+
+
+def _paper_blocker_internal_reference_paths(
+    payload: dict[str, object],
+) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    for key in (
+        "runtime_status_path",
+        "paper_simulate_status_path",
+        "paper_calendar_path",
+        "paper_progress_path",
+    ):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            paths.append(Path(value))
+    return tuple(paths)
 
 
 def _positive_float(value: object) -> bool:
@@ -386,6 +421,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.opend_account_status_path,
         input_data.paper_simulate_status_path,
         input_data.paper_blocker_report_path,
+        input_data.paper_progress_path,
     )
     paper_ledger, paper_ledger_failed = _paper_ledger_evidence(
         execution_log_path=input_data.execution_log_path,
@@ -919,6 +955,8 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
         blocker_action = _paper_blocker_next_action(check.get("evidence"))
         if blocker_action:
             return blocker_action
+        if "stale_paper_blocker_report" in failed:
+            return "refresh_paper_blocker_report"
         paper_action = _opend_paper_simulate_next_action(check.get("evidence"))
         if paper_action:
             return paper_action
@@ -1030,6 +1068,8 @@ def _paper_blocker_next_action(evidence: object) -> str | None:
         return None
     blocker = runtime.get("paper_blocker_report")
     if not isinstance(blocker, dict):
+        return None
+    if blocker.get("paper_blocker_report_stale") is True:
         return None
     action = blocker.get("next_required_action")
     return str(action) if action else None
