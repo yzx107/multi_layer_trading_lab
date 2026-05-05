@@ -17,6 +17,11 @@ class PaperSimulateStatus:
     dry_run_rows: int
     submitted_rows: int
     order_report_rows: int
+    response_error_rows: int
+    response_error_types: dict[str, int]
+    response_error_samples: tuple[str, ...]
+    blocked_by_kill_switch: bool
+    next_required_action: str
     failed_reasons: tuple[str, ...]
 
     @property
@@ -31,6 +36,11 @@ class PaperSimulateStatus:
             "dry_run_rows": self.dry_run_rows,
             "submitted_rows": self.submitted_rows,
             "order_report_rows": self.order_report_rows,
+            "response_error_rows": self.response_error_rows,
+            "response_error_types": self.response_error_types,
+            "response_error_samples": list(self.response_error_samples),
+            "blocked_by_kill_switch": self.blocked_by_kill_switch,
+            "next_required_action": self.next_required_action,
             "ready_for_session_collection": self.ready_for_session_collection,
             "failed_reasons": list(self.failed_reasons),
         }
@@ -49,6 +59,10 @@ def inspect_paper_simulate_responses(response_path: Path) -> PaperSimulateStatus
     paper_rows = sum(1 for row in rows if row.get("paper") is True)
     dry_run_rows = sum(1 for row in rows if row.get("dry_run") is True)
     submitted_rows = sum(1 for row in rows if _response_submitted(row))
+    response_errors = [_response_error(row) for row in rows]
+    response_errors = [error for error in response_errors if error]
+    response_error_types = _response_error_type_counts(response_errors)
+    blocked_by_kill_switch = any("kill switch" in error.lower() for error in response_errors)
     order_report_rows = (
         len(extract_futu_order_report_rows_from_ticket_responses(response_path))
         if rows
@@ -63,6 +77,10 @@ def inspect_paper_simulate_responses(response_path: Path) -> PaperSimulateStatus
         failed.append("missing_submitted_responses")
     if rows and order_report_rows == 0:
         failed.append("missing_futu_order_report_rows")
+    if response_errors:
+        failed.append("paper_simulate_submit_errors_present")
+    if blocked_by_kill_switch:
+        failed.append("opend_kill_switch_enabled")
 
     return PaperSimulateStatus(
         response_path=response_path,
@@ -71,6 +89,16 @@ def inspect_paper_simulate_responses(response_path: Path) -> PaperSimulateStatus
         dry_run_rows=dry_run_rows,
         submitted_rows=submitted_rows,
         order_report_rows=order_report_rows,
+        response_error_rows=len(response_errors),
+        response_error_types=response_error_types,
+        response_error_samples=tuple(response_errors[:3]),
+        blocked_by_kill_switch=blocked_by_kill_switch,
+        next_required_action=_next_required_action(
+            rows=rows,
+            dry_run_rows=dry_run_rows,
+            submitted_rows=submitted_rows,
+            blocked_by_kill_switch=blocked_by_kill_switch,
+        ),
         failed_reasons=tuple(dict.fromkeys(failed)),
     )
 
@@ -105,3 +133,46 @@ def _load_jsonl(path: Path) -> list[dict[str, object]]:
 def _response_submitted(event: dict[str, object]) -> bool:
     response = event.get("response")
     return isinstance(response, dict) and response.get("submitted") is True
+
+
+def _response_error(event: dict[str, object]) -> str | None:
+    response = event.get("response")
+    if not isinstance(response, dict):
+        return None
+    error = response.get("error")
+    if error in {None, ""}:
+        return None
+    return str(error)
+
+
+def _response_error_type_counts(errors: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for error in errors:
+        error_type = _response_error_type(error)
+        counts[error_type] = counts.get(error_type, 0) + 1
+    return counts
+
+
+def _response_error_type(error: str) -> str:
+    parts = error.split(":", 3)
+    if len(parts) >= 3:
+        return ":".join(parts[:3])
+    return parts[0] if parts else "unknown_error"
+
+
+def _next_required_action(
+    *,
+    rows: list[dict[str, object]],
+    dry_run_rows: int,
+    submitted_rows: int,
+    blocked_by_kill_switch: bool,
+) -> str:
+    if not rows:
+        return "submit_paper_simulate_tickets"
+    if dry_run_rows:
+        return "rerun_with_submit_paper_simulate"
+    if blocked_by_kill_switch:
+        return "clear_opend_kill_switch_then_resubmit_paper_simulate"
+    if submitted_rows == 0:
+        return "resubmit_paper_simulate_tickets"
+    return "collect_session_evidence"

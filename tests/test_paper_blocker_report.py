@@ -23,6 +23,7 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
         json.dumps(
             {
                 "ready_for_session_collection": False,
+                "next_required_action": "resubmit_paper_simulate_tickets",
                 "failed_reasons": ["missing_submitted_responses"],
             }
         ),
@@ -51,7 +52,10 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
     )
 
     assert report.ready_for_next_session is False
-    assert report.next_required_action == "collect_today_paper_session"
+    assert (
+        report.next_required_action
+        == "clear_opend_kill_switch_then_resubmit_paper_simulate"
+    )
     assert report.sessions_remaining == 19
     assert "opend_kill_switch_enabled" in report.failed_reasons
     assert "missing_submitted_responses" in report.failed_reasons

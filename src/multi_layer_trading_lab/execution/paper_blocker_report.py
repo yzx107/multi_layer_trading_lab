@@ -63,13 +63,23 @@ def build_paper_blocker_report(
         failed.extend(str(reason) for reason in runtime.get("failed_reasons", []))
     if paper_status is not None and paper_status.get("ready_for_session_collection") is not True:
         failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
-    next_action = (
+    calendar_next_action = (
         str(calendar.get("next_required_action"))
         if calendar is not None and calendar.get("next_required_action")
         else None
     )
-    if next_action and next_action != "collect_today_paper_session":
-        failed.append(f"paper_calendar_action:{next_action}")
+    paper_next_action = (
+        str(paper_status.get("next_required_action"))
+        if paper_status is not None and paper_status.get("next_required_action")
+        else None
+    )
+    next_action = _resolve_next_required_action(
+        failed_reasons=failed,
+        paper_next_action=paper_next_action,
+        calendar_next_action=calendar_next_action,
+    )
+    if calendar_next_action and calendar_next_action != "collect_today_paper_session":
+        failed.append(f"paper_calendar_action:{calendar_next_action}")
     sessions_remaining = _optional_int(progress.get("sessions_remaining")) if progress else None
     if progress is not None and progress.get("ready_for_live_review") is not True:
         failed.extend(str(reason) for reason in progress.get("failed_reasons", []))
@@ -123,3 +133,16 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _resolve_next_required_action(
+    *,
+    failed_reasons: list[str],
+    paper_next_action: str | None,
+    calendar_next_action: str | None,
+) -> str | None:
+    if "opend_kill_switch_enabled" in failed_reasons:
+        return "clear_opend_kill_switch_then_resubmit_paper_simulate"
+    if paper_next_action and paper_next_action != "collect_session_evidence":
+        return paper_next_action
+    return calendar_next_action or paper_next_action
