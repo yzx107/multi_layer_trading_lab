@@ -2698,6 +2698,8 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
     runtime.write_text(
         json.dumps(
             {
+                "kill_switch": True,
+                "kill_switch_file": "/tmp/futu-opend-execution.KILL",
                 "ready_for_order_submission": False,
                 "failed_reasons": ["opend_kill_switch_enabled"],
             }
@@ -2748,6 +2750,13 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
     ]
+    assert payload["blocker_details"]["opend_kill_switch"] == {
+        "enabled": True,
+        "kill_switch_file": "/tmp/futu-opend-execution.KILL",
+        "requires_manual_operator_authorization": True,
+        "automation_allowed": False,
+        "next_safe_action": "operator_must_explicitly_clear_kill_switch_before_resubmit",
+    }
 
 
 def test_combine_paper_evidence_cli_writes_combined_files(tmp_path) -> None:

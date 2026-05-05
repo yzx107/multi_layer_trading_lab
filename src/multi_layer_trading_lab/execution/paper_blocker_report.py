@@ -17,6 +17,7 @@ class PaperBlockerReport:
     sessions_remaining: int | None
     failed_reasons: tuple[str, ...]
     next_session_failed_reasons: tuple[str, ...]
+    blocker_details: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -38,6 +39,7 @@ class PaperBlockerReport:
             "sessions_remaining": self.sessions_remaining,
             "failed_reasons": list(self.failed_reasons),
             "next_session_failed_reasons": list(self.next_session_failed_reasons),
+            "blocker_details": self.blocker_details,
         }
 
 
@@ -78,6 +80,9 @@ def build_paper_blocker_report(
         reasons = [str(reason) for reason in runtime.get("failed_reasons", [])]
         failed.extend(reasons)
         next_session_failed.extend(reasons)
+    if runtime is not None and runtime.get("kill_switch") is True:
+        failed.append("opend_kill_switch_enabled")
+        next_session_failed.append("opend_kill_switch_enabled")
     if (
         paper_status is not None
         and not paper_status_stale
@@ -126,6 +131,7 @@ def build_paper_blocker_report(
     next_session_failed_tuple = tuple(
         dict.fromkeys(reason for reason in next_session_failed if reason)
     )
+    blocker_details = _blocker_details(runtime, failed)
     return PaperBlockerReport(
         runtime_status_path=runtime_status_path,
         paper_simulate_status_path=paper_simulate_status_path,
@@ -137,6 +143,7 @@ def build_paper_blocker_report(
         sessions_remaining=sessions_remaining,
         failed_reasons=failed,
         next_session_failed_reasons=next_session_failed_tuple,
+        blocker_details=blocker_details,
     )
 
 
@@ -205,6 +212,26 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _blocker_details(
+    runtime: dict[str, object] | None,
+    failed_reasons: tuple[str, ...],
+) -> dict[str, object]:
+    details: dict[str, object] = {}
+    kill_switch_enabled = runtime is not None and runtime.get("kill_switch") is True
+    if "opend_kill_switch_enabled" in failed_reasons or kill_switch_enabled:
+        kill_switch_file = runtime.get("kill_switch_file") if runtime else None
+        details["opend_kill_switch"] = {
+            "enabled": True,
+            "kill_switch_file": str(kill_switch_file) if kill_switch_file else "",
+            "requires_manual_operator_authorization": True,
+            "automation_allowed": False,
+            "next_safe_action": (
+                "operator_must_explicitly_clear_kill_switch_before_resubmit"
+            ),
+        }
+    return details
 
 
 def _resolve_next_required_action(

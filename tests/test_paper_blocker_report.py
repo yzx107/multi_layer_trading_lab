@@ -14,6 +14,8 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
     runtime.write_text(
         json.dumps(
             {
+                "kill_switch": True,
+                "kill_switch_file": "/tmp/futu-opend-execution.KILL",
                 "ready_for_order_submission": False,
                 "failed_reasons": ["opend_kill_switch_enabled"],
             }
@@ -61,6 +63,13 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
     assert report.sessions_remaining == 19
     assert "opend_kill_switch_enabled" in report.failed_reasons
     assert "opend_kill_switch_enabled" in report.next_session_failed_reasons
+    assert report.blocker_details["opend_kill_switch"] == {
+        "enabled": True,
+        "kill_switch_file": "/tmp/futu-opend-execution.KILL",
+        "requires_manual_operator_authorization": True,
+        "automation_allowed": False,
+        "next_safe_action": "operator_must_explicitly_clear_kill_switch_before_resubmit",
+    }
     assert "missing_submitted_responses" in report.failed_reasons
     assert "paper_sessions_remaining" in report.failed_reasons
     assert "paper_sessions_remaining" not in report.next_session_failed_reasons
@@ -112,6 +121,31 @@ def test_paper_blocker_report_separates_next_session_from_live_review(tmp_path) 
     assert report.next_session_failed_reasons == ()
     assert "paper_sessions_remaining" in report.failed_reasons
     assert "net_pnl_not_positive" in report.failed_reasons
+
+
+def test_paper_blocker_report_treats_runtime_kill_switch_as_blocker(tmp_path) -> None:
+    runtime = tmp_path / "runtime.json"
+    runtime.write_text(
+        json.dumps(
+            {
+                "kill_switch": True,
+                "kill_switch_file": "/tmp/futu-opend-execution.KILL",
+                "ready_for_order_submission": False,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_paper_blocker_report(runtime_status_path=runtime)
+
+    assert report.ready_for_next_session is False
+    assert (
+        report.next_required_action
+        == "clear_opend_kill_switch_then_resubmit_paper_simulate"
+    )
+    assert "opend_kill_switch_enabled" in report.failed_reasons
+    assert report.blocker_details["opend_kill_switch"]["automation_allowed"] is False
 
 
 def test_paper_blocker_report_keeps_profitability_mismatch_completion_only(
