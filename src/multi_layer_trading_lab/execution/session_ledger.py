@@ -30,6 +30,8 @@ class PaperSessionLedger:
     broker_report_rows: int
     inferred_session_count: int
     session_dates: tuple[str, ...]
+    execution_session_dates: tuple[str, ...]
+    broker_session_dates: tuple[str, ...]
     dry_run_rows: int
     failed_reasons: tuple[str, ...]
 
@@ -45,6 +47,8 @@ class PaperSessionLedger:
             "broker_report_rows": self.broker_report_rows,
             "inferred_session_count": self.inferred_session_count,
             "session_dates": list(self.session_dates),
+            "execution_session_dates": list(self.execution_session_dates),
+            "broker_session_dates": list(self.broker_session_dates),
             "dry_run_rows": self.dry_run_rows,
             "ready_for_profitability_evidence": self.ready_for_profitability_evidence,
             "failed_reasons": list(self.failed_reasons),
@@ -78,15 +82,19 @@ def build_paper_session_ledger(
     if dry_run_rows:
         failed.append("dry_run_rows_present")
 
-    dates = sorted(
-        {
-            parsed.isoformat()
-            for row in all_rows
-            if (parsed := _row_date(row)) is not None
-        }
-    )
-    if all_rows and not dates:
-        failed.append("missing_session_dates")
+    execution_dates = _session_dates(local_records)
+    broker_dates = _session_dates(broker_rows)
+    if local_records and not execution_dates:
+        failed.append("missing_execution_session_dates")
+    if broker_rows and not broker_dates:
+        failed.append("missing_broker_session_dates")
+    dates = sorted(set(execution_dates) & set(broker_dates))
+    if local_records and broker_rows and not dates:
+        failed.append("missing_broker_backed_session_dates")
+    if set(execution_dates) - set(broker_dates):
+        failed.append("execution_session_dates_missing_broker_report")
+    if set(broker_dates) - set(execution_dates):
+        failed.append("broker_session_dates_missing_execution_log")
     if dates and len(dates) < 20:
         failed.append("insufficient_inferred_sessions")
 
@@ -97,6 +105,8 @@ def build_paper_session_ledger(
         broker_report_rows=len(broker_rows),
         inferred_session_count=len(dates),
         session_dates=tuple(dates),
+        execution_session_dates=tuple(execution_dates),
+        broker_session_dates=tuple(broker_dates),
         dry_run_rows=dry_run_rows,
         failed_reasons=tuple(dict.fromkeys(failed)),
     )
@@ -127,6 +137,18 @@ def _row_date(row: dict[str, object]) -> date | None:
         if parsed is not None:
             return parsed
     return None
+
+
+def _session_dates(rows: list[dict[str, object]]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                parsed.isoformat()
+                for row in rows
+                if (parsed := _row_date(row)) is not None
+            }
+        )
+    )
 
 
 def _parse_date(value: Any) -> date | None:
