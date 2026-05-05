@@ -72,13 +72,23 @@ def _profitability_ready(path: Path | None) -> tuple[bool, dict[str, object] | N
 
 def _paper_progress_ready(
     path: Path | None,
+    reference_paths: tuple[Path | None, ...] = (),
 ) -> tuple[bool, dict[str, object] | None, list[str]]:
     if path is None:
         return True, None, []
     if not path.exists():
         return False, None, ["missing_paper_progress"]
-    payload = _load_json(path)
+    payload = dict(_load_json(path))
     failed: list[str] = []
+    stale_reference_paths = [
+        str(reference_path)
+        for reference_path in reference_paths
+        if _is_older_than(path, reference_path)
+    ]
+    if stale_reference_paths:
+        payload["paper_progress_stale"] = True
+        payload["stale_reference_paths"] = stale_reference_paths
+        failed.append("stale_paper_progress")
     if payload.get("ready_for_live_review") is not True:
         reasons = [
             str(reason)
@@ -359,7 +369,12 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.profitability_evidence_path
     )
     paper_progress_ready, paper_progress_payload, paper_progress_failed = _paper_progress_ready(
-        input_data.paper_progress_path
+        input_data.paper_progress_path,
+        reference_paths=(
+            input_data.profitability_evidence_path,
+            input_data.execution_log_path,
+            input_data.broker_report_path,
+        ),
     )
     profitability_failed.extend(paper_progress_failed)
     profitability_failed = list(dict.fromkeys(profitability_failed))
@@ -960,6 +975,8 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
     if requirement == "profitable_reconciled_paper_or_live_evidence":
         if "profitability_not_reconciled_to_broker" in failed:
             return "reconcile_profitability_evidence_to_broker"
+        if "stale_paper_progress" in failed:
+            return "refresh_paper_progress"
         if _has_any(
             failed,
             [
