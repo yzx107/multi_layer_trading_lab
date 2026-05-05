@@ -149,7 +149,10 @@ def build_profitability_evidence(
     open_position_market_value = 0.0
     peak = 0.0
     trough_drawdown = 0.0
+    cash_peak = 0.0
+    cash_trough_drawdown = 0.0
     running_cash = 0.0
+    latest_prices: dict[str, float] = {}
     for record in local_records:
         if str(record.get("status")) not in {"filled", "partial_filled"}:
             continue
@@ -160,10 +163,11 @@ def build_profitability_evidence(
         cash_flow = _signed_cash_flow(record)
         cash_pnl += cash_flow
         running_cash += cash_flow
-        peak = max(peak, running_cash)
-        trough_drawdown = min(trough_drawdown, running_cash - peak)
+        cash_peak = max(cash_peak, running_cash)
+        cash_trough_drawdown = min(cash_trough_drawdown, running_cash - cash_peak)
         if not symbol or side not in {"buy", "sell"}:
             continue
+        latest_prices[symbol] = fill_price
         signed_qty = quantity if side == "buy" else -quantity
         previous_qty = positions.get(symbol, 0.0)
         new_qty = previous_qty + signed_qty
@@ -171,6 +175,9 @@ def build_profitability_evidence(
             previous_cost = avg_cost.get(symbol, 0.0) * previous_qty
             avg_cost[symbol] = (previous_cost + quantity * fill_price) / new_qty
         positions[symbol] = new_qty
+        equity = running_cash + _marked_position_value(positions, latest_prices)
+        peak = max(peak, equity)
+        trough_drawdown = min(trough_drawdown, equity - peak)
 
     for symbol, quantity in positions.items():
         if abs(quantity) < 1e-9:
@@ -179,9 +186,14 @@ def build_profitability_evidence(
         if mark is None:
             failed.append(f"missing_mark_price:{symbol}")
             continue
+        latest_prices[symbol] = mark
         open_position_market_value += quantity * mark
 
     net_pnl = cash_pnl + open_position_market_value
+    if latest_prices:
+        final_equity = cash_pnl + _marked_position_value(positions, latest_prices)
+        peak = max(peak, final_equity)
+        trough_drawdown = min(trough_drawdown, final_equity - peak)
     if net_pnl <= 0:
         failed.append("net_pnl_not_positive")
     if trough_drawdown < -abs(input_data.max_allowed_drawdown):
@@ -200,6 +212,7 @@ def build_profitability_evidence(
         "open_position_market_value": open_position_market_value,
         "net_pnl": net_pnl,
         "max_drawdown": trough_drawdown,
+        "cash_drawdown": cash_trough_drawdown,
         "max_allowed_drawdown": input_data.max_allowed_drawdown,
         "positions": positions,
         "failed_reasons": tuple(dict.fromkeys(failed)),
@@ -210,3 +223,10 @@ def build_profitability_evidence(
         encoding="utf-8",
     )
     return evidence
+
+
+def _marked_position_value(
+    positions: dict[str, float],
+    prices: dict[str, float],
+) -> float:
+    return sum(quantity * prices.get(symbol, 0.0) for symbol, quantity in positions.items())

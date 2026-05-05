@@ -396,6 +396,8 @@ python3 -m venv .venv
   --mark-prices-path data/logs/mark_prices.json
 ```
 
+`profitability-evidence` 的 `max_drawdown` 使用 mark-to-market 权益曲线计算，避免把未平仓买入本金误判成回撤；现金占用压力会单独写入 `cash_drawdown`。
+
 把“百万级个人账户、港股 L2/Tushare/iFind/OpenD、可赚钱”这个总目标映射到机器可读完成度审计：
 
 ```bash

@@ -110,6 +110,61 @@ def test_profitability_evidence_blocks_open_position_without_mark(tmp_path) -> N
     assert "net_pnl_not_positive" in evidence["failed_reasons"]
 
 
+def test_profitability_evidence_uses_marked_equity_for_drawdown(tmp_path) -> None:
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "futu.json"
+    marks = tmp_path / "marks.json"
+    output = tmp_path / "profitability.json"
+    execution_log.write_text(
+        json.dumps(
+            {
+                "order_id": "buy-1",
+                "status": "filled",
+                "symbol": "HK.00001",
+                "side": "buy",
+                "quantity": 500,
+                "fill_price": 65.2,
+                "trade_date": "2026-05-04",
+                "dry_run": False,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps(
+            [
+                {
+                    "local_order_id": "buy-1",
+                    "order_status": "FILLED_ALL",
+                    "dealt_qty": 500,
+                    "dealt_avg_price": 65.2,
+                    "updated_time": "2026-05-04 14:50:00",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    marks.write_text(json.dumps({"HK.00001": 65.15}), encoding="utf-8")
+
+    evidence = build_profitability_evidence(
+        ProfitabilityEvidenceInput(
+            execution_log_path=execution_log,
+            broker_report_path=broker_report,
+            output_path=output,
+            paper_sessions=1,
+            mark_prices_path=marks,
+            max_allowed_drawdown=10_000.0,
+        )
+    )
+
+    assert evidence["ready"] is False
+    assert evidence["cash_drawdown"] == -32600.0
+    assert round(evidence["max_drawdown"], 6) == -25.0
+    assert "drawdown_breached" not in evidence["failed_reasons"]
+    assert "net_pnl_not_positive" in evidence["failed_reasons"]
+
+
 def test_profitability_evidence_blocks_hand_filled_session_count(tmp_path) -> None:
     execution_log = tmp_path / "execution.jsonl"
     broker_report = tmp_path / "futu.json"
