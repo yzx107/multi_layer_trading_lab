@@ -315,7 +315,7 @@ def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> No
         json.dumps(
             {
                 "ready": False,
-                "paper_sessions": 20,
+                "paper_sessions": 3,
                 "net_pnl": 0.0,
                 "max_drawdown": -10.0,
                 "max_allowed_drawdown": 10_000.0,
@@ -362,6 +362,15 @@ def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> No
     assert audit["objective_achieved"] is False
     assert "dry_run_execution_log_not_real_paper" in profit_check["failed_reasons"]
     assert profit_check["failed_reasons"].count("net_pnl_not_positive") == 1
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+    assert (
+        checklist_item["next_required_action"]
+        == "collect_17_remaining_broker_reconciled_paper_sessions"
+    )
 
 
 def test_objective_audit_report_renders_blockers_and_next_evidence(tmp_path) -> None:

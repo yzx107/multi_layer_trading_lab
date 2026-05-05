@@ -790,6 +790,9 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
                 "paper_sessions_exceed_inferred_sessions",
             ],
         ):
+            remaining = _remaining_paper_sessions(check.get("evidence"))
+            if remaining is not None and remaining > 0:
+                return f"collect_{remaining}_remaining_broker_reconciled_paper_sessions"
             return "collect_remaining_broker_reconciled_paper_sessions"
         if _has_any(failed, ["net_pnl_not_positive", "drawdown_breached"]):
             return "continue_research_and_paper_iteration_until_profitable"
@@ -824,6 +827,17 @@ def _opend_paper_simulate_next_action(evidence: object) -> str | None:
 
 def _has_any(failed: list[str], reasons: list[str]) -> bool:
     return any(reason in failed for reason in reasons)
+
+
+def _remaining_paper_sessions(evidence: object, target_sessions: int = 20) -> int | None:
+    if not isinstance(evidence, dict):
+        return None
+    try:
+        target = int(evidence.get("target_sessions", target_sessions) or target_sessions)
+        sessions = int(evidence.get("paper_sessions", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    return max(target - sessions, 0)
 
 
 def _format_list(value: object) -> str:
