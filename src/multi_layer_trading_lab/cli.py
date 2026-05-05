@@ -183,6 +183,7 @@ def fetch_tushare_to_lake(
     token: str | None = None,
     allow_stub: bool = False,
     use_real: bool = False,
+    allow_derived_security_master: bool = True,
 ) -> None:
     resolved_token = settings.tushare_token if token is None else token
     readiness = check_tushare_readiness(resolved_token)
@@ -222,21 +223,38 @@ def fetch_tushare_to_lake(
             for symbol in requested_symbols
         }
     )
+    security_master_fallback: str | None = None
+    trade_calendar_fallback: str | None = None
     try:
-        security_master = pl.concat(
-            [client.fetch_security_master(market) for market in markets],
-            how="diagonal_relaxed",
-        )
         daily_bars = pl.concat(
             [client.fetch_daily_bars(symbol, start_date, end_date) for symbol in requested_symbols],
             how="diagonal_relaxed",
         )
         daily_features = build_daily_features(daily_bars)
-        trade_calendar = client.fetch_trade_calendar(
-            start_date,
-            end_date,
-            exchange=calendar_exchange,
-        )
+        try:
+            security_master = pl.concat(
+                [client.fetch_security_master(market) for market in markets],
+                how="diagonal_relaxed",
+            )
+        except Exception:
+            if not use_real or not allow_derived_security_master:
+                raise
+            security_master = _build_security_master_from_daily_bars(daily_bars)
+            security_master_fallback = "derived_from_daily_bars"
+        try:
+            trade_calendar = client.fetch_trade_calendar(
+                start_date,
+                end_date,
+                exchange=calendar_exchange,
+            )
+        except Exception:
+            if not use_real:
+                raise
+            trade_calendar = _build_trade_calendar_from_daily_bars(
+                daily_bars,
+                exchange=calendar_exchange,
+            )
+            trade_calendar_fallback = "derived_from_daily_bars"
         minute_bars = pl.concat(
             [client.fetch_minute_bars(symbol, minute_date) for symbol in requested_symbols],
             how="diagonal_relaxed",
@@ -253,11 +271,130 @@ def fetch_tushare_to_lake(
     store.write("trade_calendar", trade_calendar)
     store.write("minute_bars", minute_bars)
     typer.echo("status=real_adapter" if use_real else "status=stub_adapter")
+    if security_master_fallback:
+        typer.echo(f"security_master_fallback={security_master_fallback}")
+    if trade_calendar_fallback:
+        typer.echo(f"trade_calendar_fallback={trade_calendar_fallback}")
     typer.echo(f"security_master_rows={security_master.height}")
     typer.echo(f"daily_bars_rows={daily_bars.height}")
     typer.echo(f"daily_features_rows={daily_features.height}")
     typer.echo(f"trade_calendar_rows={trade_calendar.height}")
     typer.echo(f"minute_bars_rows={minute_bars.height}")
+
+
+def _build_trade_calendar_from_daily_bars(
+    daily_bars: pl.DataFrame,
+    *,
+    exchange: str,
+) -> pl.DataFrame:
+    ingested_at = datetime.now(UTC)
+    if daily_bars.is_empty():
+        return TushareClient()._empty_trade_calendar()
+    return (
+        daily_bars.select("trade_date")
+        .unique()
+        .sort("trade_date")
+        .with_columns(
+            [
+                pl.lit(exchange).alias("exchange"),
+                pl.lit(True).alias("is_open"),
+                pl.col("trade_date").shift(1).alias("pretrade_date"),
+                pl.lit("tushare_pro").alias("data_source"),
+                pl.lit("daily_trade_dates").alias("source_dataset"),
+                pl.lit(f"tushare-daily-calendar-{ingested_at:%Y%m%dT%H%M%S}").alias(
+                    "source_run_id"
+                ),
+                pl.lit(ingested_at).alias("ingested_at"),
+            ]
+        )
+        .select(
+            [
+                "exchange",
+                "trade_date",
+                "is_open",
+                "pretrade_date",
+                "data_source",
+                "source_dataset",
+                "source_run_id",
+                "ingested_at",
+            ]
+        )
+    )
+
+
+def _build_security_master_from_daily_bars(daily_bars: pl.DataFrame) -> pl.DataFrame:
+    ingested_at = datetime.now(UTC)
+    if daily_bars.is_empty():
+        return TushareClient()._empty_security_master()
+    return (
+        daily_bars.select(["security_id", "symbol", "market"])
+        .unique(subset=["security_id"])
+        .with_columns(
+            [
+                pl.col("symbol").str.split(".").list.first().alias("ticker"),
+                pl.col("symbol").str.split(".").list.last().alias("exchange_suffix"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("exchange_suffix") == "SH")
+                .then(pl.lit("SSE"))
+                .when(pl.col("exchange_suffix") == "SZ")
+                .then(pl.lit("SZSE"))
+                .otherwise(pl.col("exchange_suffix"))
+                .alias("exchange"),
+                pl.lit("equity").alias("asset_type"),
+                pl.lit("CNY").alias("currency"),
+                pl.lit(100).alias("lot_size"),
+                pl.lit(None, dtype=pl.Utf8).alias("name"),
+                pl.lit(None, dtype=pl.Utf8).alias("sector"),
+                pl.lit("CN").alias("country"),
+                pl.lit(True).alias("primary_listing_flag"),
+                pl.lit(False).alias("southbound_eligible_flag"),
+                pl.lit(True).alias("northbound_proxy_flag"),
+                pl.lit(None, dtype=pl.Date).alias("listed_date"),
+                pl.lit(None, dtype=pl.Date).alias("delisted_date"),
+                pl.lit(True).alias("active_flag"),
+                pl.lit(ingested_at).alias("effective_from"),
+                pl.lit(None, dtype=pl.Datetime(time_zone="UTC")).alias("effective_to"),
+                pl.lit("tushare_pro").alias("data_source"),
+                pl.lit("daily_symbol_universe").alias("source_dataset"),
+                pl.lit(f"tushare-daily-symbols-{ingested_at:%Y%m%dT%H%M%S}").alias(
+                    "source_run_id"
+                ),
+                pl.col("symbol").alias("source_symbol"),
+                pl.lit(ingested_at).alias("ingested_at"),
+            ]
+        )
+        .select(
+            [
+                "security_id",
+                "symbol",
+                "ticker",
+                "market",
+                "exchange",
+                "asset_type",
+                "currency",
+                "lot_size",
+                "name",
+                "sector",
+                "country",
+                "primary_listing_flag",
+                "southbound_eligible_flag",
+                "northbound_proxy_flag",
+                "listed_date",
+                "delisted_date",
+                "active_flag",
+                "effective_from",
+                "effective_to",
+                "data_source",
+                "source_symbol",
+                "source_dataset",
+                "source_run_id",
+                "ingested_at",
+            ]
+        )
+    )
 
 
 @app.command()

@@ -331,13 +331,13 @@ def test_fetch_tushare_to_lake_blocks_real_token_until_real_adapter_exists(tmp_p
 def test_fetch_tushare_to_lake_blocks_cleanly_on_real_fetch_error(tmp_path, monkeypatch) -> None:
     lake_root = tmp_path / "lake"
 
-    def raise_rate_limit(*args, **kwargs):
+    def raise_fetch_error(*args, **kwargs):
         del args, kwargs
-        raise Exception("rate limit")
+        raise Exception("daily unavailable")
 
     monkeypatch.setattr(
-        "multi_layer_trading_lab.adapters.tushare.client.TushareClient.fetch_security_master",
-        raise_rate_limit,
+        "multi_layer_trading_lab.adapters.tushare.client.TushareClient.fetch_daily_bars",
+        raise_fetch_error,
     )
 
     result = CliRunner().invoke(
@@ -358,6 +358,81 @@ def test_fetch_tushare_to_lake_blocks_cleanly_on_real_fetch_error(tmp_path, monk
     assert "status=blocked" in result.output
     assert "tushare_fetch_failed:Exception" in result.output
     assert not (lake_root / "security_master" / "part-000.parquet").exists()
+
+
+def test_fetch_tushare_to_lake_derives_master_when_stock_basic_rate_limited(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    lake_root = tmp_path / "lake"
+    trade_date = datetime(2026, 4, 1).date()
+    ingested_at = datetime(2026, 4, 1, 8, 0, tzinfo=UTC)
+
+    def fake_daily(*args, **kwargs):
+        del args, kwargs
+        return pl.DataFrame(
+            {
+                "security_id": ["CN.600519", "CN.600519"],
+                "symbol": ["600519.SH", "600519.SH"],
+                "market": ["CN", "CN"],
+                "trade_date": [trade_date, trade_date + timedelta(days=1)],
+                "open": [100.0, 101.0],
+                "high": [101.0, 102.0],
+                "low": [99.0, 100.0],
+                "close": [100.5, 101.5],
+                "adj_close": [100.5, 101.5],
+                "volume": [1000.0, 1100.0],
+                "turnover": [100000.0, 111650.0],
+                "turnover_rate": [None, None],
+                "event_tag": [None, None],
+                "data_source": ["tushare_pro", "tushare_pro"],
+                "source_dataset": ["daily", "daily"],
+                "source_run_id": ["test-daily", "test-daily"],
+                "ingested_at": [ingested_at, ingested_at],
+            }
+        )
+
+    def raise_rate_limit(*args, **kwargs):
+        del args, kwargs
+        raise Exception("rate limit")
+
+    monkeypatch.setattr(
+        "multi_layer_trading_lab.adapters.tushare.client.TushareClient.fetch_daily_bars",
+        fake_daily,
+    )
+    monkeypatch.setattr(
+        "multi_layer_trading_lab.adapters.tushare.client.TushareClient.fetch_trade_calendar",
+        raise_rate_limit,
+    )
+    monkeypatch.setattr(
+        "multi_layer_trading_lab.adapters.tushare.client.TushareClient.fetch_security_master",
+        raise_rate_limit,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "fetch-tushare-to-lake",
+            "--lake-root",
+            str(lake_root),
+            "--token",
+            "token",
+            "--symbols",
+            "600519.SH",
+            "--use-real",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "status=real_adapter" in result.output
+    assert "security_master_fallback=derived_from_daily_bars" in result.output
+    assert "trade_calendar_fallback=derived_from_daily_bars" in result.output
+    master = pl.read_parquet(lake_root / "security_master" / "part-000.parquet")
+    assert master["data_source"].to_list() == ["tushare_pro"]
+    assert master["source_dataset"].to_list() == ["daily_symbol_universe"]
+    calendar = pl.read_parquet(lake_root / "trade_calendar" / "part-000.parquet")
+    assert calendar["source_dataset"].to_list() == ["daily_trade_dates", "daily_trade_dates"]
+    assert (lake_root / "daily_features" / "part-000.parquet").exists()
 
 
 def test_fetch_ifind_to_lake_blocks_without_credentials_unless_stub_allowed(tmp_path) -> None:
