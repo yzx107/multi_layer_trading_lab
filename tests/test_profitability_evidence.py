@@ -59,6 +59,11 @@ def test_profitability_evidence_builds_positive_reconciled_result(tmp_path) -> N
     assert evidence["reconciled"] is True
     assert evidence["inferred_session_count"] == 20
     assert evidence["net_pnl"] == 46.0
+    attribution = evidence["symbol_attribution"]["HK.00001"]
+    assert attribution["quantity"] == 0.0
+    assert attribution["market_value"] == 0.0
+    assert attribution["mark_price"] is None
+    assert attribution["net_pnl"] == 46.0
     assert json.loads(output.read_text(encoding="utf-8"))["ready"] is True
 
 

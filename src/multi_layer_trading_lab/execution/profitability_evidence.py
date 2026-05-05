@@ -257,7 +257,13 @@ def _build_symbol_attribution(
     for symbol in sorted(symbols):
         quantity = positions.get(symbol, 0.0)
         mark_price = marks.get(symbol)
-        market_value = quantity * mark_price if mark_price is not None else None
+        market_value = (
+            0.0
+            if abs(quantity) < 1e-9
+            else quantity * mark_price
+            if mark_price is not None
+            else None
+        )
         cash_pnl = symbol_cash_pnl.get(symbol, 0.0)
         net_pnl = cash_pnl + market_value if market_value is not None else None
         attribution[symbol] = {
