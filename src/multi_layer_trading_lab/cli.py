@@ -1872,6 +1872,7 @@ def submit_opend_paper_tickets(
     output_path: str = "data/logs/opend_paper_ticket_responses.jsonl",
     base_url: str = "http://127.0.0.1:8766",
     submit_paper_simulate: bool = False,
+    opend_runtime_status_path: str | None = None,
     allow_resubmit: bool = False,
     allow_failed_resubmit: bool = False,
     timeout_seconds: float = 8.0,
@@ -1883,6 +1884,9 @@ def submit_opend_paper_tickets(
         Path(output_path),
         base_url=base_url,
         submit_paper_simulate=submit_paper_simulate,
+        opend_runtime_status_path=Path(opend_runtime_status_path)
+        if opend_runtime_status_path
+        else None,
         allow_resubmit=allow_resubmit,
         allow_failed_resubmit=allow_failed_resubmit,
         timeout_seconds=timeout_seconds,

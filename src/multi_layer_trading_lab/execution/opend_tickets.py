@@ -265,6 +265,7 @@ def submit_opend_paper_tickets(
     *,
     base_url: str,
     submit_paper_simulate: bool = False,
+    opend_runtime_status_path: Path | None = None,
     allow_resubmit: bool = False,
     allow_failed_resubmit: bool = False,
     timeout_seconds: float = 8.0,
@@ -276,6 +277,7 @@ def submit_opend_paper_tickets(
     failed: list[str] = []
     if not tickets:
         failed.append("missing_opend_paper_tickets")
+    failed.extend(_opend_runtime_status_failed_reasons(opend_runtime_status_path))
     ticket_ids = {str(ticket.get("ticket_id") or "") for ticket in tickets}
     if output_path.exists() and not allow_resubmit:
         existing_by_ticket_id = _responses_by_ticket_id(
@@ -371,6 +373,25 @@ def submit_opend_paper_tickets(
         response_count=len(responses),
         failed_reasons=(),
     )
+
+
+def _opend_runtime_status_failed_reasons(path: Path | None) -> tuple[str, ...]:
+    if path is None:
+        return ()
+    if not path.exists():
+        return ("missing_opend_runtime_status",)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ("invalid_opend_runtime_status",)
+    if not isinstance(payload, dict):
+        return ("invalid_opend_runtime_status",)
+    if payload.get("ready_for_order_submission") is True:
+        return ()
+    failed = [str(reason) for reason in payload.get("failed_reasons", []) if str(reason)]
+    if payload.get("kill_switch") is True:
+        failed.append("opend_kill_switch_enabled")
+    return tuple(dict.fromkeys(failed or ["opend_runtime_not_ready"]))
 
 
 def _submitted_response_count(responses: list[dict[str, object]]) -> int:

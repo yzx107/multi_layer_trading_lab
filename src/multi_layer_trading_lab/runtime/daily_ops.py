@@ -223,6 +223,13 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
             ]
             if plan.submit_opend_paper_simulate_tickets:
                 submit_command.append("--submit-paper-simulate")
+                if plan.opend_runtime_status_path is not None:
+                    submit_command.extend(
+                        [
+                            "--opend-runtime-status-path",
+                            str(plan.opend_runtime_status_path),
+                        ]
+                    )
                 if plan.submit_opend_allow_failed_resubmit:
                     submit_command.append("--allow-failed-resubmit")
             commands.append(submit_command)

@@ -354,6 +354,8 @@ def test_build_daily_ops_commands_can_submit_exported_paper_simulate_tickets() -
         "submit-opend-paper-tickets",
     ]
     assert "--submit-paper-simulate" in commands[10]
+    assert "--opend-runtime-status-path" in commands[10]
+    assert "data/logs/opend_runtime_status.json" in commands[10]
     assert "--allow-failed-resubmit" in commands[10]
     assert commands[11][:4] == [
         ".venv/bin/python",

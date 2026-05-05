@@ -312,6 +312,81 @@ def test_submit_opend_paper_tickets_can_submit_simulate_payload(tmp_path) -> Non
     assert rows[0]["response"]["submitted"] is True
 
 
+def test_submit_opend_paper_tickets_blocks_not_ready_runtime_status(tmp_path) -> None:
+    ticket_path = tmp_path / "tickets.jsonl"
+    output_path = tmp_path / "responses.jsonl"
+    runtime_status_path = tmp_path / "runtime.json"
+    export_opend_paper_tickets(
+        _paper_plan(),
+        ticket_path,
+        symbol="00700.HK",
+        reference_price=100.0,
+        lot_size=100,
+    )
+    runtime_status_path.write_text(
+        json.dumps(
+            {
+                "ready_for_order_submission": False,
+                "kill_switch": True,
+                "failed_reasons": ["opend_kill_switch_enabled"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_urlopen(request, timeout: float):
+        calls.append(request.full_url)
+        return FakeResponse({"submitted": True})
+
+    result = submit_opend_paper_tickets(
+        ticket_path,
+        output_path,
+        base_url="http://127.0.0.1:8766",
+        submit_paper_simulate=True,
+        opend_runtime_status_path=runtime_status_path,
+        urlopen_fn=fake_urlopen,
+    )
+
+    assert result.ready is False
+    assert result.submitted_count == 0
+    assert calls == []
+    assert result.failed_reasons == ("opend_kill_switch_enabled",)
+    assert not output_path.exists()
+
+
+def test_submit_opend_paper_tickets_blocks_invalid_runtime_status(tmp_path) -> None:
+    ticket_path = tmp_path / "tickets.jsonl"
+    output_path = tmp_path / "responses.jsonl"
+    runtime_status_path = tmp_path / "runtime.json"
+    export_opend_paper_tickets(
+        _paper_plan(),
+        ticket_path,
+        symbol="00700.HK",
+        reference_price=100.0,
+        lot_size=100,
+    )
+    runtime_status_path.write_text("{bad json", encoding="utf-8")
+    calls = []
+
+    def fake_urlopen(request, timeout: float):
+        calls.append(request.full_url)
+        return FakeResponse({"submitted": True})
+
+    result = submit_opend_paper_tickets(
+        ticket_path,
+        output_path,
+        base_url="http://127.0.0.1:8766",
+        submit_paper_simulate=True,
+        opend_runtime_status_path=runtime_status_path,
+        urlopen_fn=fake_urlopen,
+    )
+
+    assert result.ready is False
+    assert calls == []
+    assert result.failed_reasons == ("invalid_opend_runtime_status",)
+
+
 def test_submit_opend_paper_tickets_blocks_duplicate_response_by_default(
     tmp_path,
 ) -> None:

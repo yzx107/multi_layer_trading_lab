@@ -173,6 +173,8 @@ def test_submit_opend_paper_tickets_cli_forwards_failed_resubmit_flag(tmp_path) 
                 "--output-path",
                 str(output_path),
                 "--submit-paper-simulate",
+                "--opend-runtime-status-path",
+                "data/logs/runtime.json",
                 "--allow-failed-resubmit",
             ],
         )
@@ -180,6 +182,7 @@ def test_submit_opend_paper_tickets_cli_forwards_failed_resubmit_flag(tmp_path) 
     assert result.exit_code == 0
     assert "status=ready" in result.output
     assert mocked.call_args.kwargs["allow_failed_resubmit"] is True
+    assert str(mocked.call_args.kwargs["opend_runtime_status_path"]) == "data/logs/runtime.json"
 
 
 def test_reconcile_futu_report_cli_reports_clean_match(tmp_path) -> None:
