@@ -658,6 +658,63 @@ def test_objective_audit_report_renders_blockers_and_next_evidence(tmp_path) -> 
     assert "paper_to_live_not_approved" in paper_check["failed_reasons"]
 
 
+def test_objective_audit_report_renders_operator_kill_switch_details() -> None:
+    audit = {
+        "objective_achieved": False,
+        "objective": "Build the platform.",
+        "blocked_requirements": ["opend_execution_gate"],
+        "completion_decision": {
+            "status": "not_achieved",
+            "reason": "missing OpenD evidence",
+            "blocked_requirements": ["opend_execution_gate"],
+        },
+        "prompt_to_artifact_checklist": [
+            {
+                "requirement": "opend_execution_gate",
+                "status": "blocked",
+                "next_required_action": (
+                    "clear_opend_kill_switch_then_resubmit_paper_simulate"
+                ),
+                "verification_command": "paper-blocker-report",
+                "artifacts": ["data/logs/paper_blocker_report.json"],
+                "failed_reasons": ["opend_kill_switch_enabled"],
+                "evidence": {
+                    "runtime": {
+                        "paper_blocker_report": {
+                            "blocker_details": {
+                                "opend_kill_switch": {
+                                    "enabled": True,
+                                    "kill_switch_file": (
+                                        "/tmp/futu-opend-execution.KILL"
+                                    ),
+                                    "requires_manual_operator_authorization": True,
+                                    "automation_allowed": False,
+                                    "next_safe_action": (
+                                        "operator_must_explicitly_clear_"
+                                        "kill_switch_before_resubmit"
+                                    ),
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        ],
+    }
+
+    report = render_objective_audit_report(audit)
+
+    assert "## Operator Blockers" in report
+    assert "opend_kill_switch" in report
+    assert "kill_switch_file=/tmp/futu-opend-execution.KILL" in report
+    assert "requires_manual_operator_authorization=true" in report
+    assert "automation_allowed=false" in report
+    assert (
+        "next_safe_action=operator_must_explicitly_clear_kill_switch_before_resubmit"
+        in report
+    )
+
+
 def test_objective_audit_uses_paper_session_ledger_for_paper_to_live(
     tmp_path,
 ) -> None:

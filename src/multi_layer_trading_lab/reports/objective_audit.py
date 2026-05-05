@@ -991,6 +991,16 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
                 )
                 + " |"
             )
+    operator_blockers = _operator_blocker_lines(audit)
+    if operator_blockers:
+        lines.extend(
+            [
+                "",
+                "## Operator Blockers",
+                "",
+                *operator_blockers,
+            ]
+        )
     lines.extend(
         [
             "",
@@ -1003,6 +1013,66 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
     if not blocked:
         lines.append("- None. All objective requirements have direct evidence.")
     return "\n".join(lines) + "\n"
+
+
+def _operator_blocker_lines(audit: dict[str, object]) -> list[str]:
+    kill_switch = _opend_kill_switch_blocker(audit)
+    if not kill_switch:
+        return []
+    fields = [
+        ("enabled", kill_switch.get("enabled")),
+        ("kill_switch_file", kill_switch.get("kill_switch_file")),
+        (
+            "requires_manual_operator_authorization",
+            kill_switch.get("requires_manual_operator_authorization"),
+        ),
+        ("automation_allowed", kill_switch.get("automation_allowed")),
+        ("next_safe_action", kill_switch.get("next_safe_action")),
+    ]
+    details = "; ".join(
+        f"{key}={_plain_report_value(value)}"
+        for key, value in fields
+        if value is not None and _plain_report_value(value)
+    )
+    return [f"- opend_kill_switch: {details}"]
+
+
+def _opend_kill_switch_blocker(audit: dict[str, object]) -> dict[str, object] | None:
+    for section in ("checks", "prompt_to_artifact_checklist"):
+        items = audit.get(section, [])
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("requirement") != "opend_execution_gate":
+                continue
+            blocker = _paper_blocker_report_from_evidence(item.get("evidence"))
+            if blocker is None:
+                continue
+            details = blocker.get("blocker_details")
+            if not isinstance(details, dict):
+                continue
+            kill_switch = details.get("opend_kill_switch")
+            if isinstance(kill_switch, dict):
+                return kill_switch
+    return None
+
+
+def _paper_blocker_report_from_evidence(evidence: object) -> dict[str, object] | None:
+    if not isinstance(evidence, dict):
+        return None
+    runtime = evidence.get("runtime")
+    if not isinstance(runtime, dict):
+        return None
+    blocker = runtime.get("paper_blocker_report")
+    return blocker if isinstance(blocker, dict) else None
+
+
+def _plain_report_value(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value) if value is not None else ""
 
 
 def write_objective_audit_report(audit_path: Path, output_path: Path) -> Path:
