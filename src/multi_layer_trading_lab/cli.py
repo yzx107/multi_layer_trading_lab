@@ -112,6 +112,7 @@ from multi_layer_trading_lab.execution.reconciliation import (
     reconcile_execution_reports,
 )
 from multi_layer_trading_lab.execution.session_ledger import write_paper_session_ledger
+from multi_layer_trading_lab.features.daily.basic import build_daily_features
 from multi_layer_trading_lab.features.l2.basic import build_l2_bucket_features
 from multi_layer_trading_lab.features.l2.order_add import build_order_add_bucket_features
 from multi_layer_trading_lab.pipelines.demo_pipeline import run_data_pipeline, run_demo_stack
@@ -227,6 +228,7 @@ def fetch_tushare_to_lake(
             [client.fetch_daily_bars(symbol, start_date, end_date) for symbol in requested_symbols],
             how="diagonal_relaxed",
         )
+        daily_features = build_daily_features(daily_bars)
         trade_calendar = client.fetch_trade_calendar(
             start_date,
             end_date,
@@ -244,11 +246,13 @@ def fetch_tushare_to_lake(
 
     store.write("security_master", security_master)
     store.write("daily_bars", daily_bars)
+    store.write("daily_features", daily_features)
     store.write("trade_calendar", trade_calendar)
     store.write("minute_bars", minute_bars)
     typer.echo("status=real_adapter" if use_real else "status=stub_adapter")
     typer.echo(f"security_master_rows={security_master.height}")
     typer.echo(f"daily_bars_rows={daily_bars.height}")
+    typer.echo(f"daily_features_rows={daily_features.height}")
     typer.echo(f"trade_calendar_rows={trade_calendar.height}")
     typer.echo(f"minute_bars_rows={minute_bars.height}")
 

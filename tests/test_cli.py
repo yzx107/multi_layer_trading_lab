@@ -310,7 +310,9 @@ def test_fetch_tushare_to_lake_blocks_without_token_unless_stub_allowed(tmp_path
     )
     assert allowed.exit_code == 0
     assert "status=stub_adapter" in allowed.output
+    assert "daily_features_rows=" in allowed.output
     assert (lake_root / "daily_bars" / "part-000.parquet").exists()
+    assert (lake_root / "daily_features" / "part-000.parquet").exists()
 
 
 def test_fetch_tushare_to_lake_blocks_real_token_until_real_adapter_exists(tmp_path) -> None:
