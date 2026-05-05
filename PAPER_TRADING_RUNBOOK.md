@@ -215,6 +215,7 @@ kill switch 只能由操作员在明确授权后于自动化之外完成。
   --execution-log-path data/logs/execution_log.jsonl \
   --broker-report-path data/logs/futu_order_report.json \
   --opend-quote-snapshot-path data/logs/opend_quote_snapshot.json \
+  --paper-operator-handoff-path data/logs/paper_operator_handoff.json \
   --build-mark-prices-from-opend-quote \
   --mark-prices-path data/logs/mark_prices.json \
   --paper-sessions 20

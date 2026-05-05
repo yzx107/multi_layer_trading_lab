@@ -17,6 +17,7 @@ class DailyOpsPlan:
     profitability_evidence_path: Path | None = Path("data/logs/profitability_evidence.json")
     paper_progress_path: Path | None = Path("data/logs/paper_progress.json")
     paper_blocker_report_path: Path | None = Path("data/logs/paper_blocker_report.json")
+    paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json")
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json")
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json")
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json")
@@ -377,6 +378,17 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         if plan.paper_progress_path is not None:
             blocker_command.extend(["--paper-progress-path", str(plan.paper_progress_path)])
         commands.append(blocker_command)
+        if plan.paper_operator_handoff_path is not None:
+            commands.append(
+                [
+                    *base,
+                    "paper-operator-handoff",
+                    "--paper-blocker-report-path",
+                    str(plan.paper_blocker_report_path),
+                    "--output-path",
+                    str(plan.paper_operator_handoff_path),
+                ]
+            )
 
     ops_command = [
         *base,
@@ -584,6 +596,7 @@ def _blocks_submission(command: list[str]) -> bool:
 def _run_after_submission_block(command_name: str) -> bool:
     return command_name in {
         "paper-blocker-report",
+        "paper-operator-handoff",
         "ops-report",
         "go-live-readiness",
         "objective-audit",
@@ -601,6 +614,7 @@ def default_plan(
     profitability_evidence_path: Path | None = Path("data/logs/profitability_evidence.json"),
     paper_progress_path: Path | None = Path("data/logs/paper_progress.json"),
     paper_blocker_report_path: Path | None = Path("data/logs/paper_blocker_report.json"),
+    paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json"),
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json"),
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json"),
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json"),
@@ -645,6 +659,7 @@ def default_plan(
         profitability_evidence_path=profitability_evidence_path,
         paper_progress_path=paper_progress_path,
         paper_blocker_report_path=paper_blocker_report_path,
+        paper_operator_handoff_path=paper_operator_handoff_path,
         paper_session_calendar_path=paper_session_calendar_path,
         opend_quote_snapshot_path=opend_quote_snapshot_path,
         opend_runtime_status_path=opend_runtime_status_path,

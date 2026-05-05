@@ -149,6 +149,7 @@ def test_run_daily_ops_plan_writes_diagnostics_after_runtime_submission_block(
     assert "export-opend-paper-tickets" not in commands_seen
     assert "submit-opend-paper-tickets" not in commands_seen
     assert "paper-blocker-report" in commands_seen
+    assert "paper-operator-handoff" in commands_seen
     assert "ops-report" in commands_seen
     assert "go-live-readiness" in commands_seen
     assert "objective-audit" in commands_seen
@@ -195,6 +196,7 @@ def test_run_daily_ops_plan_writes_diagnostics_after_account_submission_block(
     assert "export-opend-paper-tickets" not in commands_seen
     assert "submit-opend-paper-tickets" not in commands_seen
     assert "paper-blocker-report" in commands_seen
+    assert "paper-operator-handoff" in commands_seen
     assert "ops-report" in commands_seen
     assert "objective-audit" in commands_seen
     assert any(result.returncode == 1 for result in results)
@@ -368,7 +370,10 @@ def test_build_daily_ops_commands_can_submit_exported_paper_simulate_tickets() -
     assert "--response-path" in commands[11]
     assert "data/logs/responses.jsonl" in commands[11]
     assert commands[12][3] == "paper-blocker-report"
-    assert commands[13][3] == "ops-report"
+    assert commands[13][3] == "paper-operator-handoff"
+    assert "--paper-blocker-report-path" in commands[13]
+    assert "data/logs/paper_blocker_report.json" in commands[13]
+    assert commands[14][3] == "ops-report"
 
 
 def test_build_daily_ops_commands_can_require_calendar_collect_before_simulate_submit() -> None:
@@ -488,23 +493,26 @@ def test_build_daily_ops_commands_can_include_real_paper_evidence_paths() -> Non
     assert "--broker-report-path" in commands[9]
     assert "data/logs/futu.json" in commands[9]
     assert commands[10][3] == "paper-blocker-report"
-    assert "--futu-report-path" in commands[12]
-    assert "data/logs/futu.json" in commands[12]
-    assert "--paper-sessions" in commands[12]
-    assert "20" in commands[12]
-    assert "--manual-live-enable" in commands[12]
-    assert commands[13][3] == "objective-audit"
-    assert "--research-input-manifest-path" in commands[13]
-    assert "data/logs/research_input_manifest.json" in commands[13]
-    assert "--paper-blocker-report-path" in commands[13]
-    assert "data/logs/paper_blocker_report.json" in commands[13]
-    assert "--paper-progress-path" in commands[13]
-    assert "data/logs/paper_progress.json" in commands[13]
-    assert "--execution-log-path" in commands[13]
-    assert "data/logs/execution.jsonl" in commands[13]
-    assert "--broker-report-path" in commands[13]
+    assert commands[11][3] == "paper-operator-handoff"
+    assert "--paper-blocker-report-path" in commands[11]
+    assert "data/logs/paper_blocker_report.json" in commands[11]
+    assert "--futu-report-path" in commands[13]
     assert "data/logs/futu.json" in commands[13]
-    assert commands[14][3] == "objective-audit-report"
+    assert "--paper-sessions" in commands[13]
+    assert "20" in commands[13]
+    assert "--manual-live-enable" in commands[13]
+    assert commands[14][3] == "objective-audit"
+    assert "--research-input-manifest-path" in commands[14]
+    assert "data/logs/research_input_manifest.json" in commands[14]
+    assert "--paper-blocker-report-path" in commands[14]
+    assert "data/logs/paper_blocker_report.json" in commands[14]
+    assert "--paper-progress-path" in commands[14]
+    assert "data/logs/paper_progress.json" in commands[14]
+    assert "--execution-log-path" in commands[14]
+    assert "data/logs/execution.jsonl" in commands[14]
+    assert "--broker-report-path" in commands[14]
+    assert "data/logs/futu.json" in commands[14]
+    assert commands[15][3] == "objective-audit-report"
 
 
 def test_build_daily_ops_commands_can_build_full_paper_evidence_bundle() -> None:
@@ -545,19 +553,22 @@ def test_build_daily_ops_commands_can_build_full_paper_evidence_bundle() -> None
     assert "--profitability-evidence-path" in commands[9]
     assert "data/logs/profitability.json" in commands[9]
     assert commands[10][3] == "paper-blocker-report"
-    assert commands[13][3] == "objective-audit"
-    assert "--research-input-manifest-path" in commands[13]
-    assert "data/logs/research_input_manifest.json" in commands[13]
-    assert "--profitability-evidence-path" in commands[13]
-    assert "data/logs/profitability.json" in commands[13]
-    assert "--paper-blocker-report-path" in commands[13]
-    assert "data/logs/paper_blocker_report.json" in commands[13]
-    assert "--paper-progress-path" in commands[13]
-    assert "data/logs/paper_progress.json" in commands[13]
-    assert "--execution-log-path" in commands[13]
-    assert "data/logs/execution.jsonl" in commands[13]
-    assert "--broker-report-path" in commands[13]
-    assert "data/logs/futu.json" in commands[13]
+    assert commands[11][3] == "paper-operator-handoff"
+    assert "--paper-blocker-report-path" in commands[11]
+    assert "data/logs/paper_blocker_report.json" in commands[11]
+    assert commands[14][3] == "objective-audit"
+    assert "--research-input-manifest-path" in commands[14]
+    assert "data/logs/research_input_manifest.json" in commands[14]
+    assert "--profitability-evidence-path" in commands[14]
+    assert "data/logs/profitability.json" in commands[14]
+    assert "--paper-blocker-report-path" in commands[14]
+    assert "data/logs/paper_blocker_report.json" in commands[14]
+    assert "--paper-progress-path" in commands[14]
+    assert "data/logs/paper_progress.json" in commands[14]
+    assert "--execution-log-path" in commands[14]
+    assert "data/logs/execution.jsonl" in commands[14]
+    assert "--broker-report-path" in commands[14]
+    assert "data/logs/futu.json" in commands[14]
 
 
 def test_build_daily_ops_commands_can_auto_build_mark_prices_from_quote() -> None:

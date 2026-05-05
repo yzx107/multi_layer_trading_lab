@@ -22,6 +22,10 @@ def main() -> None:
         default="data/logs/paper_blocker_report.json",
     )
     parser.add_argument(
+        "--paper-operator-handoff-path",
+        default="data/logs/paper_operator_handoff.json",
+    )
+    parser.add_argument(
         "--paper-session-calendar-path",
         default="data/logs/paper_session_calendar.json",
     )
@@ -103,6 +107,7 @@ def main() -> None:
         profitability_evidence_path=Path(args.profitability_evidence_path),
         paper_progress_path=Path(args.paper_progress_path),
         paper_blocker_report_path=Path(args.paper_blocker_report_path),
+        paper_operator_handoff_path=Path(args.paper_operator_handoff_path),
         paper_session_calendar_path=Path(args.paper_session_calendar_path),
         opend_quote_snapshot_path=Path(args.opend_quote_snapshot_path),
         opend_runtime_status_path=Path(args.opend_runtime_status_path),
