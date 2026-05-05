@@ -531,7 +531,7 @@ daily ops 的 `paper-session-plan` 会默认消费 `data/logs/opend_quote_snapsh
   --output-path data/logs/paper_progress.paper_combined.json
 ```
 
-`combine-paper-evidence` 会拒绝 dry-run 行、空文件和重复 order id；只有合并后 `paper-session-ledger` 推导出至少 20 个 execution/broker 日期交集 session，`profitability-evidence` 才可能进入正收益对账判断。
+`combine-paper-evidence` 会拒绝 dry-run 行、空文件、重复 order id 和 execution/broker 两边不匹配的 order id；只有合并后 `paper-session-ledger` 推导出至少 20 个 execution/broker 日期交集 session，`profitability-evidence` 才可能进入正收益对账判断。
 `paper-session-calendar` 会根据合并日志判断今天是否已有 broker-backed session，并输出 `collect_today_paper_session`、`wait_next_trade_date` 或 `target_complete`，避免同一天重复累计。
 `paper-progress` 是每日收口视图，会直接输出还差多少 session、当前 net PnL、最大回撤、是否 broker reconciled，以及是否可以进入 live review。
 

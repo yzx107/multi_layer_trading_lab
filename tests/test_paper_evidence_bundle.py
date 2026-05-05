@@ -115,3 +115,36 @@ def test_combine_paper_evidence_files_blocks_dry_run_and_duplicates(tmp_path) ->
     assert "dry_run_broker_report_rows_present" in result.failed_reasons
     assert "duplicate_execution_order_id:ord-1" in result.failed_reasons
     assert "duplicate_broker_order_id:ord-1" in result.failed_reasons
+
+
+def test_combine_paper_evidence_files_blocks_unmatched_order_ids(tmp_path) -> None:
+    execution = tmp_path / "execution.jsonl"
+    broker = tmp_path / "broker.json"
+    execution.write_text(
+        json.dumps({"order_id": "local-only", "trade_date": "2026-04-01", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker.write_text(
+        json.dumps(
+            [
+                {
+                    "local_order_id": "broker-only",
+                    "updated_time": "2026-04-01 10:00:00",
+                    "dry_run": False,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = combine_paper_evidence_files(
+        execution_log_paths=(execution,),
+        broker_report_paths=(broker,),
+        output_execution_log_path=tmp_path / "out.jsonl",
+        output_broker_report_path=tmp_path / "out.json",
+    )
+
+    assert result.ready is False
+    assert "execution_order_missing_broker_report:local-only" in result.failed_reasons
+    assert "broker_order_missing_execution_log:broker-only" in result.failed_reasons

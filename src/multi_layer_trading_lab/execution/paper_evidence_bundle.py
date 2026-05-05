@@ -62,8 +62,26 @@ def combine_paper_evidence_files(
         str(row.get("local_order_id") or row.get("remark") or row.get("order_id") or "")
         for row in broker_rows
     )
+    execution_order_ids = {
+        str(row.get("order_id") or "")
+        for row in execution_rows
+        if str(row.get("order_id") or "")
+    }
+    broker_order_ids = {
+        str(row.get("local_order_id") or row.get("remark") or row.get("order_id") or "")
+        for row in broker_rows
+        if str(row.get("local_order_id") or row.get("remark") or row.get("order_id") or "")
+    }
     failed.extend(f"duplicate_execution_order_id:{order_id}" for order_id in execution_ids)
     failed.extend(f"duplicate_broker_order_id:{order_id}" for order_id in broker_ids)
+    failed.extend(
+        f"execution_order_missing_broker_report:{order_id}"
+        for order_id in sorted(execution_order_ids - broker_order_ids)
+    )
+    failed.extend(
+        f"broker_order_missing_execution_log:{order_id}"
+        for order_id in sorted(broker_order_ids - execution_order_ids)
+    )
 
     if not execution_rows:
         failed.append("missing_combined_execution_rows")
