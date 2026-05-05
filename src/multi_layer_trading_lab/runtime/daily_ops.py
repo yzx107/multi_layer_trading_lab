@@ -439,6 +439,8 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         str(plan.readiness_path),
         "--output-path",
         str(plan.objective_audit_path),
+        "--research-input-manifest-path",
+        str(plan.research_input_manifest_path),
     ]
     if plan.profitability_evidence_path is not None:
         objective_audit_command.extend(

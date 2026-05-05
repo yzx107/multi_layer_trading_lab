@@ -14,6 +14,7 @@ from multi_layer_trading_lab.execution.session_ledger import (
 class ObjectiveAuditInput:
     readiness_manifest_path: Path
     output_path: Path
+    research_input_manifest_path: Path | None = None
     profitability_evidence_path: Path | None = None
     ifind_validation_report_path: Path | None = None
     ifind_ingestion_status_path: Path | None = None
@@ -109,6 +110,80 @@ def _paper_progress_ready(
         ]
         failed.extend(reasons or ["paper_progress_not_ready_for_live_review"])
     return not failed, payload, list(dict.fromkeys(failed))
+
+
+def _research_input_manifest_reuse(
+    path: Path | None,
+) -> tuple[dict[str, object] | None, list[str], list[str]]:
+    if path is None:
+        return None, [], []
+    if not path.exists():
+        evidence = {"path": str(path), "exists": False}
+        return evidence, ["missing_research_input_manifest"], [
+            "missing_research_input_manifest"
+        ]
+
+    payload = dict(_load_json(path))
+    hshare_failed: list[str] = []
+    factor_failed: list[str] = []
+    external_repos = _dict_payload(payload.get("external_repos"))
+    research_inputs = _dict_payload(payload.get("research_inputs"))
+
+    hshare_repo = _dict_payload(external_repos.get("hshare_lab_v2"))
+    if not hshare_repo:
+        hshare_failed.append("missing_hshare_lab_reuse_check")
+    else:
+        if hshare_repo.get("ready") is not True:
+            hshare_failed.append("hshare_lab_v2_not_ready")
+        if hshare_repo.get("missing_paths"):
+            hshare_failed.append("hshare_lab_v2_missing_paths")
+
+    hshare_stage = _dict_payload(research_inputs.get("hshare_stage"))
+    hshare_verified = _dict_payload(research_inputs.get("hshare_verified"))
+    if not hshare_stage:
+        hshare_failed.append("missing_hshare_stage_reuse_input")
+    else:
+        if hshare_stage.get("exists") is not True:
+            hshare_failed.append("hshare_stage_reuse_input_missing")
+        if _optional_int(hshare_stage.get("file_count")) == 0:
+            hshare_failed.append("hshare_stage_reuse_input_empty")
+    if not hshare_verified:
+        hshare_failed.append("missing_hshare_verified_reuse_input")
+    else:
+        if hshare_verified.get("exists") is not True:
+            hshare_failed.append("hshare_verified_reuse_input_missing")
+        if _optional_int(hshare_verified.get("manifest_count")) == 0:
+            hshare_failed.append("hshare_verified_manifest_empty")
+        if _optional_int(hshare_verified.get("parquet_count")) == 0:
+            hshare_failed.append("hshare_verified_parquet_empty")
+
+    factor_repo = _dict_payload(external_repos.get("hk_factor_autoresearch"))
+    if not factor_repo:
+        factor_failed.append("missing_factor_factory_reuse_check")
+    else:
+        if factor_repo.get("ready") is not True:
+            factor_failed.append("hk_factor_autoresearch_not_ready")
+        if factor_repo.get("missing_paths"):
+            factor_failed.append("hk_factor_autoresearch_missing_paths")
+
+    factor_registry = _dict_payload(research_inputs.get("factor_registry"))
+    factor_runs = _dict_payload(research_inputs.get("factor_runs"))
+    if not factor_registry:
+        factor_failed.append("missing_factor_registry_reuse_input")
+    else:
+        if factor_registry.get("exists") is not True:
+            factor_failed.append("factor_registry_reuse_input_missing")
+        if _optional_int(factor_registry.get("file_count")) == 0:
+            factor_failed.append("factor_registry_reuse_input_empty")
+    if not factor_runs:
+        factor_failed.append("missing_factor_runs_reuse_input")
+    else:
+        if factor_runs.get("exists") is not True:
+            factor_failed.append("factor_runs_reuse_input_missing")
+        if _optional_int(factor_runs.get("summary_count")) == 0:
+            factor_failed.append("factor_runs_reuse_input_empty")
+
+    return payload, list(dict.fromkeys(hshare_failed)), list(dict.fromkeys(factor_failed))
 
 
 def _opend_runtime_ready(
@@ -453,6 +528,10 @@ def _optional_int(value: object) -> int | None:
         return None
 
 
+def _dict_payload(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
 def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     readiness = _load_json(input_data.readiness_manifest_path)
     ifind_validation_payload = _ifind_validation_payload(input_data.ifind_validation_report_path)
@@ -523,11 +602,33 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         for item in readiness.get("data_freshness", [])
         if isinstance(item, dict)
     }
+    (
+        research_input_manifest_payload,
+        hshare_reuse_failed,
+        factor_reuse_failed,
+    ) = _research_input_manifest_reuse(input_data.research_input_manifest_path)
 
-    hk_l2_ready = (
+    intraday_l2_fresh = (
         data_freshness.get("intraday_l2_features", {}).get("status") == "fresh"
-        and readiness.get("hshare_verified", {}).get("ready") is True
     )
+    hshare_verified_payload = _dict_payload(readiness.get("hshare_verified"))
+    hk_l2_ready = (
+        intraday_l2_fresh
+        and hshare_verified_payload.get("ready") is True
+        and not hshare_reuse_failed
+    )
+    hk_l2_failed: list[str] = []
+    if not intraday_l2_fresh:
+        hk_l2_failed.append("intraday_l2_features_not_fresh")
+    if hshare_verified_payload.get("ready") is not True:
+        hk_l2_failed.extend(
+            _readiness_failed_reasons(
+                hshare_verified_payload,
+                "hshare_verified_not_ready",
+            )
+        )
+    hk_l2_failed.extend(hshare_reuse_failed)
+    hk_l2_failed = list(dict.fromkeys(hk_l2_failed))
     tushare_ready = (
         data_sources.get("tushare", {}).get("ready") is True
         and source_adapters.get("tushare", {}).get("live_data_ready") is True
@@ -538,7 +639,26 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     )
     opend_ready = readiness.get("execution", {}).get("opend_ready") is True and opend_runtime_ready
     personal_risk_ready = bool(readiness.get("account_risk_budget"))
-    research_ready = readiness.get("research_to_paper", {}).get("approved") is True
+    research_to_paper = _dict_payload(readiness.get("research_to_paper"))
+    external_factor_portfolio = _dict_payload(readiness.get("external_factor_portfolio"))
+    research_failed = (
+        []
+        if research_to_paper.get("approved") is True
+        else _readiness_failed_reasons(
+            research_to_paper,
+            "research_to_paper_not_approved",
+        )
+    )
+    if external_factor_portfolio and external_factor_portfolio.get("approved") is not True:
+        research_failed.extend(
+            _readiness_failed_reasons(
+                external_factor_portfolio,
+                "external_factor_portfolio_not_approved",
+            )
+        )
+    research_failed.extend(factor_reuse_failed)
+    research_failed = list(dict.fromkeys(research_failed))
+    research_ready = not research_failed
     paper_to_live_evidence = readiness.get("paper_to_live", {})
     paper_ready = (
         isinstance(paper_to_live_evidence, dict)
@@ -562,15 +682,22 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         {
             "requirement": "wall_street_style_research_and_gate_process",
             "status": _status(research_ready),
-            "evidence": readiness.get("research_to_paper", {}),
+            "evidence": {
+                "research_to_paper": research_to_paper,
+                "external_factor_portfolio": external_factor_portfolio,
+                "research_input_manifest": research_input_manifest_payload,
+            },
+            "failed_reasons": research_failed,
         },
         {
             "requirement": "hk_l2_data_reuse",
             "status": _status(hk_l2_ready),
             "evidence": {
                 "intraday_l2_features": data_freshness.get("intraday_l2_features", {}),
-                "hshare_verified": readiness.get("hshare_verified", {}),
+                "hshare_verified": hshare_verified_payload,
+                "research_input_manifest": research_input_manifest_payload,
             },
+            "failed_reasons": hk_l2_failed,
         },
         {
             "requirement": "tushare_real_data_adapter",
@@ -644,6 +771,11 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         ),
         "success_criteria": success_criteria,
         "readiness_manifest_path": str(input_data.readiness_manifest_path),
+        "research_input_manifest_path": (
+            str(input_data.research_input_manifest_path)
+            if input_data.research_input_manifest_path is not None
+            else None
+        ),
         "profitability_evidence_path": (
             str(input_data.profitability_evidence_path)
             if input_data.profitability_evidence_path is not None
@@ -709,6 +841,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             checks=checks,
             success_criteria=success_criteria,
             readiness_manifest_path=input_data.readiness_manifest_path,
+            research_input_manifest_path=input_data.research_input_manifest_path,
             profitability_evidence_path=input_data.profitability_evidence_path,
             ifind_validation_report_path=input_data.ifind_validation_report_path,
             ifind_ingestion_status_path=input_data.ifind_ingestion_status_path,
@@ -841,6 +974,8 @@ def _success_criteria() -> list[dict[str, object]]:
             "minimum_evidence": [
                 "research_to_paper approved",
                 "lookahead, cost, capacity, and research gates represented in readiness manifest",
+                "external factor factory portfolio approved when present",
+                "research input manifest confirms hk_factor_autoresearch reuse when supplied",
             ],
         },
         {
@@ -851,6 +986,7 @@ def _success_criteria() -> list[dict[str, object]]:
             "minimum_evidence": [
                 "intraday_l2_features fresh",
                 "hshare_verified ready",
+                "research input manifest confirms Hshare Lab verified reuse when supplied",
             ],
         },
         {
@@ -915,6 +1051,7 @@ def _prompt_to_artifact_checklist(
     checks: list[dict[str, object]],
     success_criteria: list[dict[str, object]],
     readiness_manifest_path: Path,
+    research_input_manifest_path: Path | None,
     profitability_evidence_path: Path | None,
     ifind_validation_report_path: Path | None,
     ifind_ingestion_status_path: Path | None,
@@ -932,11 +1069,14 @@ def _prompt_to_artifact_checklist(
     artifacts = {
         "wall_street_style_research_and_gate_process": [
             str(readiness_manifest_path),
+            str(research_input_manifest_path) if research_input_manifest_path else None,
             "src/multi_layer_trading_lab/reports/readiness.py",
             "src/multi_layer_trading_lab/research/audit.py",
+            "src/multi_layer_trading_lab/research/factor_factory.py",
         ],
         "hk_l2_data_reuse": [
             str(readiness_manifest_path),
+            str(research_input_manifest_path) if research_input_manifest_path else None,
             "EXTERNAL_REUSE_MAP.md",
             "src/multi_layer_trading_lab/research/hshare_verified.py",
         ],
@@ -983,8 +1123,11 @@ def _prompt_to_artifact_checklist(
         ],
     }
     commands = {
-        "wall_street_style_research_and_gate_process": "research-audit / go-live-readiness",
-        "hk_l2_data_reuse": "hshare-verified-audit / go-live-readiness",
+        "wall_street_style_research_and_gate_process": (
+            "research-input-manifest / factor-factory-summary / research-audit / "
+            "go-live-readiness"
+        ),
+        "hk_l2_data_reuse": "research-input-manifest / hshare-verified-audit / go-live-readiness",
         "tushare_real_data_adapter": "fetch-tushare-to-lake --use-real / data-adapter-status",
         "ifind_real_data_adapter": (
             "fetch-ifind-to-lake --use-real or import-ifind-events-file"
@@ -1135,8 +1278,42 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
     if requirement == "tushare_real_data_adapter":
         return "refresh_tushare_real_adapter_status"
     if requirement == "hk_l2_data_reuse":
+        if _has_any(
+            failed,
+            [
+                "missing_research_input_manifest",
+                "missing_hshare_lab_reuse_check",
+                "missing_hshare_stage_reuse_input",
+                "missing_hshare_verified_reuse_input",
+                "hshare_lab_v2_missing_paths",
+                "hshare_lab_v2_not_ready",
+                "hshare_stage_reuse_input_empty",
+                "hshare_stage_reuse_input_missing",
+                "hshare_verified_manifest_empty",
+                "hshare_verified_parquet_empty",
+                "hshare_verified_reuse_input_missing",
+            ],
+        ):
+            return "refresh_research_input_manifest"
         return "refresh_hshare_verified_and_l2_freshness"
     if requirement == "wall_street_style_research_and_gate_process":
+        if _has_any(
+            failed,
+            [
+                "external_factor_portfolio_not_approved",
+                "factor_registry_reuse_input_empty",
+                "factor_registry_reuse_input_missing",
+                "factor_runs_reuse_input_empty",
+                "factor_runs_reuse_input_missing",
+                "hk_factor_autoresearch_missing_paths",
+                "hk_factor_autoresearch_not_ready",
+                "missing_factor_factory_reuse_check",
+                "missing_factor_registry_reuse_input",
+                "missing_factor_runs_reuse_input",
+                "missing_research_input_manifest",
+            ],
+        ):
+            return "refresh_factor_factory_reuse_evidence"
         return "rerun_research_audit_and_readiness_gate"
     if requirement == "million_scale_personal_account_risk":
         return "rerun_million_scale_risk_precheck"
@@ -1247,14 +1424,16 @@ def _next_required_evidence(requirement: str) -> str:
         ),
         "hk_l2_data_reuse": (
             "Refresh Hshare verified evidence and intraday_l2_features freshness in "
-            "go-live-readiness."
+            "go-live-readiness, and refresh research-input-manifest when external reuse "
+            "paths are missing."
         ),
         "tushare_real_data_adapter": (
             "Run fetch-tushare-to-lake --use-real and confirm data-adapter-status "
             "reports live data."
         ),
         "wall_street_style_research_and_gate_process": (
-            "Pass research-audit and go-live-readiness research_to_paper gates."
+            "Pass research-audit and go-live-readiness research_to_paper gates, with "
+            "factor factory reuse evidence from research-input-manifest."
         ),
         "million_scale_personal_account_risk": (
             "Include account_risk_budget from risk-precheck/go-live-readiness."

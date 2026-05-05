@@ -41,6 +41,31 @@ def _write_ready_opend_account_status(path) -> None:
     )
 
 
+def _write_ready_research_input_manifest(path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "ready": True,
+                "external_repos": {
+                    "hshare_lab_v2": {"ready": True, "missing_paths": []},
+                    "hk_factor_autoresearch": {"ready": True, "missing_paths": []},
+                },
+                "research_inputs": {
+                    "hshare_stage": {"exists": True, "file_count": 20},
+                    "hshare_verified": {
+                        "exists": True,
+                        "manifest_count": 1,
+                        "parquet_count": 20,
+                    },
+                    "factor_registry": {"exists": True, "file_count": 3},
+                    "factor_runs": {"exists": True, "summary_count": 5},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_objective_audit_blocks_without_profitability_and_live_adapters(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     ifind_validation = tmp_path / "ifind_validation.json"
@@ -273,6 +298,119 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
     assert account_status["configured_acc_id"] == "***0001"
     assert account_status["accounts"][0]["card_num"] == "***0001"
     assert account_status["accounts"][1]["acc_id"] == "***0002"
+
+
+def test_objective_audit_accepts_research_input_manifest_reuse_evidence(
+    tmp_path,
+) -> None:
+    readiness = tmp_path / "readiness.json"
+    research_inputs = tmp_path / "research_inputs.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "external_factor_portfolio": {"approved": True, "failed_reasons": []},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_ready_research_input_manifest(research_inputs)
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            research_input_manifest_path=research_inputs,
+        )
+    )
+    wall_street_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "wall_street_style_research_and_gate_process"
+    ][0]
+    hshare_check = [
+        check for check in audit["checks"] if check["requirement"] == "hk_l2_data_reuse"
+    ][0]
+    wall_street_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "wall_street_style_research_and_gate_process"
+    ][0]
+
+    assert wall_street_check["status"] == "passed"
+    assert hshare_check["status"] == "passed"
+    assert (
+        wall_street_check["evidence"]["research_input_manifest"]["research_inputs"][
+            "factor_runs"
+        ]["summary_count"]
+        == 5
+    )
+    assert str(research_inputs) in wall_street_item["artifacts"]
+
+
+def test_objective_audit_blocks_missing_research_input_manifest_when_supplied(
+    tmp_path,
+) -> None:
+    readiness = tmp_path / "readiness.json"
+    research_inputs = tmp_path / "missing_research_inputs.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "external_factor_portfolio": {"approved": True, "failed_reasons": []},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            research_input_manifest_path=research_inputs,
+        )
+    )
+    wall_street_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "wall_street_style_research_and_gate_process"
+    ][0]
+    hshare_check = [
+        check for check in audit["checks"] if check["requirement"] == "hk_l2_data_reuse"
+    ][0]
+    hshare_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "hk_l2_data_reuse"
+    ][0]
+
+    assert wall_street_check["status"] == "blocked"
+    assert hshare_check["status"] == "blocked"
+    assert "missing_research_input_manifest" in wall_street_check["failed_reasons"]
+    assert "missing_research_input_manifest" in hshare_check["failed_reasons"]
+    assert hshare_item["next_required_action"] == "refresh_research_input_manifest"
 
 
 def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> None:

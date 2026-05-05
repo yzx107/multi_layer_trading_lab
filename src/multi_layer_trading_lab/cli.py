@@ -2405,6 +2405,7 @@ def go_live_readiness(
 def objective_audit(
     readiness_manifest_path: str = "data/logs/go_live_readiness.json",
     output_path: str = "data/logs/objective_audit.json",
+    research_input_manifest_path: str | None = None,
     profitability_evidence_path: str | None = None,
     ifind_validation_report_path: str | None = "data/logs/ifind_events_validation.json",
     ifind_ingestion_status_path: str | None = "data/logs/ifind_ingestion_status.json",
@@ -2422,6 +2423,9 @@ def objective_audit(
         ObjectiveAuditInput(
             readiness_manifest_path=Path(readiness_manifest_path),
             output_path=Path(output_path),
+            research_input_manifest_path=Path(research_input_manifest_path)
+            if research_input_manifest_path
+            else None,
             profitability_evidence_path=Path(profitability_evidence_path)
             if profitability_evidence_path
             else None,
