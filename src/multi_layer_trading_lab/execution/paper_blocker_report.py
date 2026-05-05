@@ -12,9 +12,11 @@ class PaperBlockerReport:
     paper_calendar_path: Path | None
     paper_progress_path: Path | None
     ready_for_next_session: bool
+    ready_for_live_review: bool | None
     next_required_action: str | None
     sessions_remaining: int | None
     failed_reasons: tuple[str, ...]
+    next_session_failed_reasons: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -31,9 +33,11 @@ class PaperBlockerReport:
             if self.paper_progress_path
             else None,
             "ready_for_next_session": self.ready_for_next_session,
+            "ready_for_live_review": self.ready_for_live_review,
             "next_required_action": self.next_required_action,
             "sessions_remaining": self.sessions_remaining,
             "failed_reasons": list(self.failed_reasons),
+            "next_session_failed_reasons": list(self.next_session_failed_reasons),
         }
 
 
@@ -45,6 +49,7 @@ def build_paper_blocker_report(
     paper_progress_path: Path | None = None,
 ) -> PaperBlockerReport:
     failed: list[str] = []
+    next_session_failed: list[str] = []
     runtime = _load_optional_json(runtime_status_path)
     paper_status = _load_optional_json(paper_simulate_status_path)
     calendar = _load_optional_json(paper_calendar_path)
@@ -56,23 +61,31 @@ def build_paper_blocker_report(
 
     if runtime_status_path is not None and runtime is None:
         failed.append("missing_opend_runtime_status")
+        next_session_failed.append("missing_opend_runtime_status")
     if paper_simulate_status_path is not None and paper_status is None:
         failed.append("missing_paper_simulate_status")
+        next_session_failed.append("missing_paper_simulate_status")
     if paper_status_stale:
         failed.append("stale_paper_simulate_status")
+        next_session_failed.append("stale_paper_simulate_status")
     if paper_calendar_path is not None and calendar is None:
         failed.append("missing_paper_session_calendar")
+        next_session_failed.append("missing_paper_session_calendar")
     if paper_progress_path is not None and progress is None:
         failed.append("missing_paper_progress")
 
     if runtime is not None and runtime.get("ready_for_order_submission") is not True:
-        failed.extend(str(reason) for reason in runtime.get("failed_reasons", []))
+        reasons = [str(reason) for reason in runtime.get("failed_reasons", [])]
+        failed.extend(reasons)
+        next_session_failed.extend(reasons)
     if (
         paper_status is not None
         and not paper_status_stale
         and paper_status.get("ready_for_session_collection") is not True
     ):
-        failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
+        reasons = [str(reason) for reason in paper_status.get("failed_reasons", [])]
+        failed.extend(reasons)
+        next_session_failed.extend(reasons)
     calendar_next_action = (
         str(calendar.get("next_required_action"))
         if calendar is not None and calendar.get("next_required_action")
@@ -93,21 +106,37 @@ def build_paper_blocker_report(
         calendar_next_action=calendar_next_action,
     )
     if calendar_next_action and calendar_next_action != "collect_today_paper_session":
-        failed.append(f"paper_calendar_action:{calendar_next_action}")
+        reason = f"paper_calendar_action:{calendar_next_action}"
+        failed.append(reason)
+        next_session_failed.append(reason)
     sessions_remaining = _optional_int(progress.get("sessions_remaining")) if progress else None
+    ready_for_live_review = (
+        progress.get("ready_for_live_review") is True if progress is not None else None
+    )
     if progress is not None and progress.get("ready_for_live_review") is not True:
-        failed.extend(str(reason) for reason in progress.get("failed_reasons", []))
+        progress_reasons = [str(reason) for reason in progress.get("failed_reasons", [])]
+        failed.extend(progress_reasons)
+        next_session_failed.extend(
+            reason
+            for reason in progress_reasons
+            if reason not in _PROGRESS_COMPLETION_ONLY_REASONS
+        )
 
     failed = tuple(dict.fromkeys(reason for reason in failed if reason))
+    next_session_failed_tuple = tuple(
+        dict.fromkeys(reason for reason in next_session_failed if reason)
+    )
     return PaperBlockerReport(
         runtime_status_path=runtime_status_path,
         paper_simulate_status_path=paper_simulate_status_path,
         paper_calendar_path=paper_calendar_path,
         paper_progress_path=paper_progress_path,
-        ready_for_next_session=not failed,
+        ready_for_next_session=not next_session_failed_tuple,
+        ready_for_live_review=ready_for_live_review,
         next_required_action=next_action,
         sessions_remaining=sessions_remaining,
         failed_reasons=failed,
+        next_session_failed_reasons=next_session_failed_tuple,
     )
 
 
@@ -138,6 +167,15 @@ def _load_optional_json(path: Path | None) -> dict[str, object] | None:
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else None
+
+
+_PROGRESS_COMPLETION_ONLY_REASONS = {
+    "insufficient_inferred_sessions",
+    "insufficient_inferred_paper_sessions",
+    "insufficient_profitable_paper_sessions",
+    "net_pnl_not_positive",
+    "paper_sessions_remaining",
+}
 
 
 def _is_older_than(path: Path | None, reference_path: Path | None) -> bool:

@@ -1387,6 +1387,8 @@ def paper_blocker_report(
         paper_progress_path=Path(paper_progress_path) if paper_progress_path else None,
     )
     typer.echo(f"ready_for_next_session={str(report.ready_for_next_session).lower()}")
+    if report.ready_for_live_review is not None:
+        typer.echo(f"ready_for_live_review={str(report.ready_for_live_review).lower()}")
     if report.next_required_action:
         typer.echo(f"next_required_action={report.next_required_action}")
     if report.sessions_remaining is not None:
@@ -1394,6 +1396,10 @@ def paper_blocker_report(
     typer.echo(f"paper_blocker_report={output_path}")
     if report.failed_reasons:
         typer.echo(f"failed_reasons={','.join(report.failed_reasons)}")
+    if report.next_session_failed_reasons:
+        typer.echo(
+            f"next_session_failed_reasons={','.join(report.next_session_failed_reasons)}"
+        )
 
 
 def _split_paths(value: str) -> tuple[Path, ...]:

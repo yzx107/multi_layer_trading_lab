@@ -2513,10 +2513,18 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert "ready_for_next_session=false" in result.output
+    assert (
+        "next_session_failed_reasons=opend_kill_switch_enabled,missing_submitted_responses"
+        in result.output
+    )
     assert "opend_kill_switch_enabled" in result.output
     assert "missing_submitted_responses" in result.output
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["failed_reasons"] == [
+        "opend_kill_switch_enabled",
+        "missing_submitted_responses",
+    ]
+    assert payload["next_session_failed_reasons"] == [
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
     ]
