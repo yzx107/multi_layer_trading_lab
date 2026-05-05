@@ -161,6 +161,13 @@ def test_profitability_evidence_uses_marked_equity_for_drawdown(tmp_path) -> Non
     assert evidence["ready"] is False
     assert evidence["cash_drawdown"] == -32600.0
     assert round(evidence["max_drawdown"], 6) == -25.0
+    attribution = evidence["symbol_attribution"]["HK.00001"]
+    assert attribution["quantity"] == 500.0
+    assert attribution["avg_cost"] == 65.2
+    assert attribution["latest_trade_price"] == 65.2
+    assert attribution["mark_price"] == 65.15
+    assert round(attribution["market_value"], 6) == 32575.0
+    assert round(attribution["net_pnl"], 6) == -25.0
     assert "drawdown_breached" not in evidence["failed_reasons"]
     assert "net_pnl_not_positive" in evidence["failed_reasons"]
 

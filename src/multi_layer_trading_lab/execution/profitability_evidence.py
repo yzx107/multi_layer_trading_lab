@@ -153,6 +153,8 @@ def build_profitability_evidence(
     cash_trough_drawdown = 0.0
     running_cash = 0.0
     latest_prices: dict[str, float] = {}
+    latest_trade_prices: dict[str, float] = {}
+    symbol_cash_pnl: dict[str, float] = {}
     for record in local_records:
         if str(record.get("status")) not in {"filled", "partial_filled"}:
             continue
@@ -167,7 +169,9 @@ def build_profitability_evidence(
         cash_trough_drawdown = min(cash_trough_drawdown, running_cash - cash_peak)
         if not symbol or side not in {"buy", "sell"}:
             continue
+        symbol_cash_pnl[symbol] = symbol_cash_pnl.get(symbol, 0.0) + cash_flow
         latest_prices[symbol] = fill_price
+        latest_trade_prices[symbol] = fill_price
         signed_qty = quantity if side == "buy" else -quantity
         previous_qty = positions.get(symbol, 0.0)
         new_qty = previous_qty + signed_qty
@@ -190,6 +194,13 @@ def build_profitability_evidence(
         open_position_market_value += quantity * mark
 
     net_pnl = cash_pnl + open_position_market_value
+    symbol_attribution = _build_symbol_attribution(
+        symbol_cash_pnl=symbol_cash_pnl,
+        positions=positions,
+        avg_cost=avg_cost,
+        marks=marks,
+        latest_trade_prices=latest_trade_prices,
+    )
     if latest_prices:
         final_equity = cash_pnl + _marked_position_value(positions, latest_prices)
         peak = max(peak, final_equity)
@@ -215,6 +226,7 @@ def build_profitability_evidence(
         "cash_drawdown": cash_trough_drawdown,
         "max_allowed_drawdown": input_data.max_allowed_drawdown,
         "positions": positions,
+        "symbol_attribution": symbol_attribution,
         "failed_reasons": tuple(dict.fromkeys(failed)),
     }
     input_data.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,3 +242,31 @@ def _marked_position_value(
     prices: dict[str, float],
 ) -> float:
     return sum(quantity * prices.get(symbol, 0.0) for symbol, quantity in positions.items())
+
+
+def _build_symbol_attribution(
+    *,
+    symbol_cash_pnl: dict[str, float],
+    positions: dict[str, float],
+    avg_cost: dict[str, float],
+    marks: dict[str, float],
+    latest_trade_prices: dict[str, float],
+) -> dict[str, dict[str, float | None]]:
+    attribution: dict[str, dict[str, float | None]] = {}
+    symbols = set(symbol_cash_pnl) | set(positions)
+    for symbol in sorted(symbols):
+        quantity = positions.get(symbol, 0.0)
+        mark_price = marks.get(symbol)
+        market_value = quantity * mark_price if mark_price is not None else None
+        cash_pnl = symbol_cash_pnl.get(symbol, 0.0)
+        net_pnl = cash_pnl + market_value if market_value is not None else None
+        attribution[symbol] = {
+            "cash_pnl": cash_pnl,
+            "quantity": quantity,
+            "avg_cost": avg_cost.get(symbol),
+            "latest_trade_price": latest_trade_prices.get(symbol),
+            "mark_price": mark_price,
+            "market_value": market_value,
+            "net_pnl": net_pnl,
+        }
+    return attribution
