@@ -57,6 +57,8 @@ def test_profitability_evidence_builds_positive_reconciled_result(tmp_path) -> N
 
     assert evidence["ready"] is True
     assert evidence["reconciled"] is True
+    assert evidence["paper_sessions"] == 20
+    assert evidence["requested_paper_sessions"] == 20
     assert evidence["inferred_session_count"] == 20
     assert evidence["net_pnl"] == 46.0
     attribution = evidence["symbol_attribution"]["HK.00001"]
@@ -245,6 +247,8 @@ def test_profitability_evidence_blocks_hand_filled_session_count(tmp_path) -> No
     )
 
     assert evidence["ready"] is False
+    assert evidence["paper_sessions"] == 1
+    assert evidence["requested_paper_sessions"] == 20
     assert evidence["inferred_session_count"] == 1
     assert "insufficient_inferred_paper_sessions" in evidence["failed_reasons"]
     assert "paper_sessions_exceed_inferred_sessions" in evidence["failed_reasons"]

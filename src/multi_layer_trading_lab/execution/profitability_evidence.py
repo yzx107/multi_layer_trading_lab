@@ -212,7 +212,8 @@ def build_profitability_evidence(
 
     evidence = {
         "ready": not failed,
-        "paper_sessions": input_data.paper_sessions,
+        "paper_sessions": session_ledger.inferred_session_count,
+        "requested_paper_sessions": input_data.paper_sessions,
         "inferred_session_count": session_ledger.inferred_session_count,
         "session_dates": session_ledger.session_dates,
         "execution_log_rows": len(local_records),
