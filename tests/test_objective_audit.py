@@ -13,16 +13,16 @@ def _write_ready_opend_account_status(path) -> None:
     path.write_text(
         json.dumps(
             {
-                "configured_acc_id": 281756479117805085,
+                "configured_acc_id": 9100000000000001,
                 "accounts": [
                     {
-                        "acc_id": 281756479117805085,
-                        "card_num": "1001302006092966",
-                        "uni_card_num": "1001253358518586",
+                        "acc_id": 9100000000000001,
+                        "card_num": "TESTCARD0001",
+                        "uni_card_num": "TESTUNI0001",
                         "trd_env": "REAL",
                     },
                     {
-                        "acc_id": 15091974,
+                        "acc_id": 92000002,
                         "card_num": "N/A",
                         "uni_card_num": "N/A",
                         "trd_env": "SIMULATE",
@@ -269,9 +269,9 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
         check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
     ][0]
     account_status = opend_check["evidence"]["runtime"]["account_status"]
-    assert account_status["configured_acc_id"] == "***5085"
-    assert account_status["accounts"][0]["card_num"] == "***2966"
-    assert account_status["accounts"][1]["acc_id"] == "***1974"
+    assert account_status["configured_acc_id"] == "***0001"
+    assert account_status["accounts"][0]["card_num"] == "***0001"
+    assert account_status["accounts"][1]["acc_id"] == "***0002"
 
 
 def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> None:

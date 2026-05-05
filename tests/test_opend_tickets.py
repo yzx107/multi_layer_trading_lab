@@ -171,16 +171,16 @@ def test_fetch_opend_account_status_detects_hk_stock_sim_account() -> None:
         assert timeout == 3.0
         return FakeResponse(
             {
-                "configured_acc_id": 281756479117805085,
+                "configured_acc_id": 9100000000000001,
                 "accounts": [
                     {
-                        "acc_id": 281756479117805085,
+                        "acc_id": 9100000000000001,
                         "trd_env": "REAL",
                         "sim_acc_type": "N/A",
                         "trdmarket_auth": ["HK"],
                     },
                     {
-                        "acc_id": 15091974,
+                        "acc_id": 92000002,
                         "trd_env": "SIMULATE",
                         "sim_acc_type": "STOCK",
                         "trdmarket_auth": ["HK"],
@@ -199,9 +199,9 @@ def test_fetch_opend_account_status_detects_hk_stock_sim_account() -> None:
     assert status["simulate_account_count"] == 1
     assert status["hk_stock_simulate_account_count"] == 1
     assert status["failed_reasons"] == []
-    assert status["configured_acc_id"] == "***5085"
-    assert status["accounts"][0]["acc_id"] == "***5085"
-    assert status["accounts"][1]["acc_id"] == "***1974"
+    assert status["configured_acc_id"] == "***0001"
+    assert status["accounts"][0]["acc_id"] == "***0001"
+    assert status["accounts"][1]["acc_id"] == "***0002"
 
 
 def test_fetch_opend_account_status_blocks_without_hk_stock_sim_account() -> None:
