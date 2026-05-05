@@ -25,6 +25,7 @@ class ObjectiveAuditInput:
     execution_log_path: Path | None = None
     broker_report_path: Path | None = None
     paper_blocker_report_path: Path | None = None
+    paper_progress_path: Path | None = None
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -67,6 +68,25 @@ def _profitability_ready(path: Path | None) -> tuple[bool, dict[str, object] | N
         failed.append("profitability_not_reconciled_to_broker")
     failed = list(dict.fromkeys(failed))
     return not failed, payload, failed
+
+
+def _paper_progress_ready(
+    path: Path | None,
+) -> tuple[bool, dict[str, object] | None, list[str]]:
+    if path is None:
+        return True, None, []
+    if not path.exists():
+        return False, None, ["missing_paper_progress"]
+    payload = _load_json(path)
+    failed: list[str] = []
+    if payload.get("ready_for_live_review") is not True:
+        reasons = [
+            str(reason)
+            for reason in payload.get("failed_reasons", [])
+            if str(reason)
+        ]
+        failed.extend(reasons or ["paper_progress_not_ready_for_live_review"])
+    return not failed, payload, list(dict.fromkeys(failed))
 
 
 def _opend_runtime_ready(
@@ -338,6 +358,12 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     profitability_ready, profitability_payload, profitability_failed = _profitability_ready(
         input_data.profitability_evidence_path
     )
+    paper_progress_ready, paper_progress_payload, paper_progress_failed = _paper_progress_ready(
+        input_data.paper_progress_path
+    )
+    profitability_failed.extend(paper_progress_failed)
+    profitability_failed = list(dict.fromkeys(profitability_failed))
+    profitability_ready = profitability_ready and paper_progress_ready
     opend_runtime_ready, opend_runtime_evidence, opend_runtime_failed = _opend_runtime_ready(
         input_data.opend_quote_snapshot_path,
         input_data.opend_ticket_response_path,
@@ -463,7 +489,10 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         {
             "requirement": "profitable_reconciled_paper_or_live_evidence",
             "status": _status(profitability_ready),
-            "evidence": profitability_payload,
+            "evidence": _profitability_evidence_payload(
+                profitability_payload,
+                paper_progress_payload,
+            ),
             "failed_reasons": profitability_failed,
         },
     ]
@@ -528,6 +557,11 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             if input_data.paper_blocker_report_path is not None
             else None
         ),
+        "paper_progress_path": (
+            str(input_data.paper_progress_path)
+            if input_data.paper_progress_path is not None
+            else None
+        ),
         "execution_log_path": (
             str(input_data.execution_log_path)
             if input_data.execution_log_path is not None
@@ -552,6 +586,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             opend_account_status_path=input_data.opend_account_status_path,
             paper_simulate_status_path=input_data.paper_simulate_status_path,
             paper_blocker_report_path=input_data.paper_blocker_report_path,
+            paper_progress_path=input_data.paper_progress_path,
             execution_log_path=input_data.execution_log_path,
             broker_report_path=input_data.broker_report_path,
         ),
@@ -583,6 +618,18 @@ def _paper_to_live_evidence_payload(
     )
     if paper_ledger is not None:
         payload["paper_session_ledger"] = paper_ledger.to_dict()
+    return payload
+
+
+def _profitability_evidence_payload(
+    profitability_evidence: dict[str, object] | None,
+    paper_progress: dict[str, object] | None,
+) -> dict[str, object] | None:
+    if profitability_evidence is None and paper_progress is None:
+        return None
+    payload = dict(profitability_evidence or {})
+    if paper_progress is not None:
+        payload["paper_progress"] = paper_progress
     return payload
 
 
@@ -745,6 +792,7 @@ def _prompt_to_artifact_checklist(
     opend_account_status_path: Path | None,
     paper_simulate_status_path: Path | None,
     paper_blocker_report_path: Path | None,
+    paper_progress_path: Path | None,
     execution_log_path: Path | None,
     broker_report_path: Path | None,
 ) -> list[dict[str, object]]:
@@ -797,7 +845,9 @@ def _prompt_to_artifact_checklist(
         ],
         "profitable_reconciled_paper_or_live_evidence": [
             str(profitability_evidence_path) if profitability_evidence_path else None,
+            str(paper_progress_path) if paper_progress_path else None,
             "src/multi_layer_trading_lab/execution/profitability_evidence.py",
+            "src/multi_layer_trading_lab/execution/paper_progress.py",
         ],
     }
     commands = {
@@ -816,7 +866,9 @@ def _prompt_to_artifact_checklist(
         "paper_to_live_execution_evidence": (
             "paper-session-ledger / paper-audit / build-paper-session-evidence-bundle"
         ),
-        "profitable_reconciled_paper_or_live_evidence": "profitability-evidence",
+        "profitable_reconciled_paper_or_live_evidence": (
+            "profitability-evidence / paper-progress"
+        ),
     }
     checklist: list[dict[str, object]] = []
     for criterion in success_criteria:
@@ -913,7 +965,9 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
             [
                 "insufficient_inferred_paper_sessions",
                 "insufficient_profitable_paper_sessions",
+                "insufficient_inferred_sessions",
                 "paper_sessions_exceed_inferred_sessions",
+                "paper_sessions_remaining",
             ],
         ):
             remaining = _remaining_paper_sessions(check.get("evidence"))
@@ -971,6 +1025,12 @@ def _has_any(failed: list[str], reasons: list[str]) -> bool:
 def _remaining_paper_sessions(evidence: object, target_sessions: int = 20) -> int | None:
     if not isinstance(evidence, dict):
         return None
+    progress = evidence.get("paper_progress")
+    if isinstance(progress, dict):
+        try:
+            return max(int(progress.get("sessions_remaining", 0) or 0), 0)
+        except (TypeError, ValueError):
+            pass
     try:
         target = int(evidence.get("target_sessions", target_sessions) or target_sessions)
         sessions = int(evidence.get("paper_sessions", 0) or 0)

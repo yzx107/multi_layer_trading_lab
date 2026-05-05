@@ -494,6 +494,8 @@ def test_build_daily_ops_commands_can_include_real_paper_evidence_paths() -> Non
     assert commands[13][3] == "objective-audit"
     assert "--paper-blocker-report-path" in commands[13]
     assert "data/logs/paper_blocker_report.json" in commands[13]
+    assert "--paper-progress-path" in commands[13]
+    assert "data/logs/paper_progress.json" in commands[13]
     assert "--execution-log-path" in commands[13]
     assert "data/logs/execution.jsonl" in commands[13]
     assert "--broker-report-path" in commands[13]
@@ -544,6 +546,8 @@ def test_build_daily_ops_commands_can_build_full_paper_evidence_bundle() -> None
     assert "data/logs/profitability.json" in commands[13]
     assert "--paper-blocker-report-path" in commands[13]
     assert "data/logs/paper_blocker_report.json" in commands[13]
+    assert "--paper-progress-path" in commands[13]
+    assert "data/logs/paper_progress.json" in commands[13]
     assert "--execution-log-path" in commands[13]
     assert "data/logs/execution.jsonl" in commands[13]
     assert "--broker-report-path" in commands[13]

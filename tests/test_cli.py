@@ -2103,6 +2103,7 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
     execution_log = tmp_path / "execution.jsonl"
     broker_report = tmp_path / "broker.json"
     blocker = tmp_path / "paper_blocker.json"
+    progress = tmp_path / "paper_progress.json"
     output = tmp_path / "objective_audit.json"
     readiness.write_text(
         json.dumps(
@@ -2140,6 +2141,16 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
         ),
         encoding="utf-8",
     )
+    progress.write_text(
+        json.dumps(
+            {
+                "ready_for_live_review": False,
+                "sessions_remaining": 19,
+                "failed_reasons": ["paper_sessions_remaining"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -2155,6 +2166,8 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
             str(broker_report),
             "--paper-blocker-report-path",
             str(blocker),
+            "--paper-progress-path",
+            str(progress),
         ],
     )
 
@@ -2178,6 +2191,12 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
         ]
         == "clear_opend_kill_switch_then_resubmit_paper_simulate"
     )
+    profit_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+    assert profit_check["evidence"]["paper_progress"]["sessions_remaining"] == 19
 
 
 def test_objective_audit_report_cli_writes_markdown(tmp_path) -> None:

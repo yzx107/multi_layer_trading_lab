@@ -615,6 +615,116 @@ def test_objective_audit_uses_paper_blocker_report_for_opend_next_action(
     assert checklist_item["next_required_action"] == "wait_next_trade_date"
 
 
+def test_objective_audit_uses_paper_progress_for_profitability_next_action(
+    tmp_path,
+) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    progress = tmp_path / "paper_progress.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": True,
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    progress.write_text(
+        json.dumps(
+            {
+                "ready_for_live_review": False,
+                "sessions_remaining": 3,
+                "failed_reasons": ["paper_sessions_remaining"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":true}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    _write_ready_opend_account_status(account)
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            paper_progress_path=progress,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
+        )
+    )
+    profit_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "paper_sessions_remaining" in profit_check["failed_reasons"]
+    assert profit_check["evidence"]["paper_progress"]["sessions_remaining"] == 3
+    assert str(progress) in checklist_item["artifacts"]
+    assert (
+        checklist_item["next_required_action"]
+        == "collect_3_remaining_broker_reconciled_paper_sessions"
+    )
+
+
 def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
