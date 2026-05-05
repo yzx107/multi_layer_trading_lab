@@ -172,6 +172,18 @@ OpenD ticket 的 `remark` 会写入当前项目生成的 `ticket_id`，抽取器
   --output-path data/logs/mark_prices.json
 ```
 
+如果 `paper-blocker-report` 显示 OpenD kill switch 被打开，先生成操作员交接工件：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli paper-operator-handoff \
+  --paper-blocker-report-path data/logs/paper_blocker_report.json \
+  --output-path data/logs/paper_operator_handoff.json
+```
+
+该命令只读 blocker report，不会清除 kill switch，也不会提交 paper/live 订单。输出里的
+`order_submission_allowed=false` 和 `remediation_automation_allowed=false` 是硬约束；解除
+kill switch 只能由操作员在明确授权后于自动化之外完成。
+
 校验证据：
 
 ```bash

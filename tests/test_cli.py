@@ -2759,6 +2759,59 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
     }
 
 
+def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) -> None:
+    blocker = tmp_path / "paper_blocker.json"
+    output = tmp_path / "handoff.json"
+    blocker.write_text(
+        json.dumps(
+            {
+                "ready_for_next_session": False,
+                "next_required_action": (
+                    "clear_opend_kill_switch_then_resubmit_paper_simulate"
+                ),
+                "failed_reasons": ["opend_kill_switch_enabled"],
+                "next_session_failed_reasons": ["opend_kill_switch_enabled"],
+                "blocker_details": {
+                    "opend_kill_switch": {
+                        "enabled": True,
+                        "kill_switch_file": "/tmp/futu-opend-execution.KILL",
+                        "requires_manual_operator_authorization": True,
+                        "automation_allowed": False,
+                        "next_safe_action": (
+                            "operator_must_explicitly_clear_kill_switch_before_resubmit"
+                        ),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "paper-operator-handoff",
+            "--paper-blocker-report-path",
+            str(blocker),
+            "--output-path",
+            str(output),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "status=manual_operator_authorization_required" in result.output
+    assert "manual_authorization_required=true" in result.output
+    assert "remediation_automation_allowed=false" in result.output
+    assert "order_submission_allowed=false" in result.output
+    assert "opend_kill_switch_enabled" in result.output
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "manual_operator_authorization_required"
+    assert payload["manual_authorization_required"] is True
+    assert payload["remediation_automation_allowed"] is False
+    assert payload["order_submission_allowed"] is False
+    assert "do_not_clear_kill_switch_from_automation" in payload["prohibited_actions"]
+
+
 def test_combine_paper_evidence_cli_writes_combined_files(tmp_path) -> None:
     execution = tmp_path / "execution.jsonl"
     broker = tmp_path / "broker.json"

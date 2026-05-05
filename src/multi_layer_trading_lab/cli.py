@@ -76,6 +76,9 @@ from multi_layer_trading_lab.execution.opend_tickets import (
 from multi_layer_trading_lab.execution.opend_tickets import (
     submit_opend_paper_tickets as post_opend_paper_tickets,
 )
+from multi_layer_trading_lab.execution.operator_handoff import (
+    write_paper_operator_handoff,
+)
 from multi_layer_trading_lab.execution.paper_audit import (
     PaperAuditInput,
     run_paper_promotion_audit,
@@ -1619,6 +1622,36 @@ def paper_blocker_report(
         typer.echo(
             f"next_session_failed_reasons={','.join(report.next_session_failed_reasons)}"
         )
+
+
+@app.command()
+def paper_operator_handoff(
+    paper_blocker_report_path: str = "data/logs/paper_blocker_report.json",
+    output_path: str = "data/logs/paper_operator_handoff.json",
+) -> None:
+    handoff = write_paper_operator_handoff(
+        paper_blocker_report_path=Path(paper_blocker_report_path),
+        output_path=Path(output_path),
+    )
+    typer.echo(f"status={handoff.status}")
+    typer.echo(
+        "manual_authorization_required="
+        f"{str(handoff.manual_authorization_required).lower()}"
+    )
+    typer.echo(
+        "remediation_automation_allowed="
+        f"{str(handoff.remediation_automation_allowed).lower()}"
+    )
+    typer.echo(
+        f"order_submission_allowed={str(handoff.order_submission_allowed).lower()}"
+    )
+    if handoff.next_required_action:
+        typer.echo(f"next_required_action={handoff.next_required_action}")
+    if handoff.next_safe_action:
+        typer.echo(f"next_safe_action={handoff.next_safe_action}")
+    typer.echo(f"paper_operator_handoff={output_path}")
+    if handoff.failed_reasons:
+        typer.echo(f"failed_reasons={','.join(handoff.failed_reasons)}")
 
 
 def _split_paths(value: str) -> tuple[Path, ...]:
