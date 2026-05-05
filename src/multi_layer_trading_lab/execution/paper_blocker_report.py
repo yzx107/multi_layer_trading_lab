@@ -49,11 +49,17 @@ def build_paper_blocker_report(
     paper_status = _load_optional_json(paper_simulate_status_path)
     calendar = _load_optional_json(paper_calendar_path)
     progress = _load_optional_json(paper_progress_path)
+    paper_status_stale = _is_older_than(
+        paper_simulate_status_path,
+        runtime_status_path,
+    )
 
     if runtime_status_path is not None and runtime is None:
         failed.append("missing_opend_runtime_status")
     if paper_simulate_status_path is not None and paper_status is None:
         failed.append("missing_paper_simulate_status")
+    if paper_status_stale:
+        failed.append("stale_paper_simulate_status")
     if paper_calendar_path is not None and calendar is None:
         failed.append("missing_paper_session_calendar")
     if paper_progress_path is not None and progress is None:
@@ -61,7 +67,11 @@ def build_paper_blocker_report(
 
     if runtime is not None and runtime.get("ready_for_order_submission") is not True:
         failed.extend(str(reason) for reason in runtime.get("failed_reasons", []))
-    if paper_status is not None and paper_status.get("ready_for_session_collection") is not True:
+    if (
+        paper_status is not None
+        and not paper_status_stale
+        and paper_status.get("ready_for_session_collection") is not True
+    ):
         failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
     calendar_next_action = (
         str(calendar.get("next_required_action"))
@@ -70,7 +80,11 @@ def build_paper_blocker_report(
     )
     paper_next_action = (
         str(paper_status.get("next_required_action"))
-        if paper_status is not None and paper_status.get("next_required_action")
+        if (
+            paper_status is not None
+            and not paper_status_stale
+            and paper_status.get("next_required_action")
+        )
         else None
     )
     next_action = _resolve_next_required_action(
@@ -124,6 +138,14 @@ def _load_optional_json(path: Path | None) -> dict[str, object] | None:
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else None
+
+
+def _is_older_than(path: Path | None, reference_path: Path | None) -> bool:
+    if path is None or reference_path is None:
+        return False
+    if not path.exists() or not reference_path.exists():
+        return False
+    return path.stat().st_mtime < reference_path.stat().st_mtime
 
 
 def _optional_int(value: object) -> int | None:
