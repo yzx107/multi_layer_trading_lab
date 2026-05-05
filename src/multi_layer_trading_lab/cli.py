@@ -1271,6 +1271,8 @@ def paper_progress(
         typer.echo(f"net_pnl={progress.net_pnl:.2f}")
     if progress.max_drawdown is not None:
         typer.echo(f"max_drawdown={progress.max_drawdown:.2f}")
+    if progress.cash_drawdown is not None:
+        typer.echo(f"cash_drawdown={progress.cash_drawdown:.2f}")
     if progress.reconciled is not None:
         typer.echo(f"reconciled={str(progress.reconciled).lower()}")
     typer.echo(f"paper_progress={output_path}")

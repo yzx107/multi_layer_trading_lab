@@ -40,6 +40,7 @@ def test_paper_progress_reports_remaining_sessions_and_pnl(tmp_path) -> None:
                 "ready": False,
                 "net_pnl": -25.0,
                 "max_drawdown": -100.0,
+                "cash_drawdown": -800.0,
                 "reconciled": True,
                 "failed_reasons": ["net_pnl_not_positive"],
             }
@@ -58,6 +59,8 @@ def test_paper_progress_reports_remaining_sessions_and_pnl(tmp_path) -> None:
     assert progress.inferred_session_count == 1
     assert progress.sessions_remaining == 19
     assert progress.net_pnl == -25.0
+    assert progress.max_drawdown == -100.0
+    assert progress.cash_drawdown == -800.0
     assert progress.reconciled is True
     assert "paper_sessions_remaining" in progress.failed_reasons
     assert "net_pnl_not_positive" in progress.failed_reasons

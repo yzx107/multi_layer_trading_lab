@@ -21,6 +21,7 @@ class PaperProgress:
     profitability_ready: bool | None
     net_pnl: float | None
     max_drawdown: float | None
+    cash_drawdown: float | None
     reconciled: bool | None
     ready_for_live_review: bool
     failed_reasons: tuple[str, ...]
@@ -38,6 +39,7 @@ class PaperProgress:
             "profitability_ready": self.profitability_ready,
             "net_pnl": self.net_pnl,
             "max_drawdown": self.max_drawdown,
+            "cash_drawdown": self.cash_drawdown,
             "reconciled": self.reconciled,
             "ready_for_live_review": self.ready_for_live_review,
             "failed_reasons": list(self.failed_reasons),
@@ -92,6 +94,7 @@ def build_paper_progress(
     profitability_ready = None
     net_pnl = None
     max_drawdown = None
+    cash_drawdown = None
     reconciled = None
     if profitability is None:
         failed.append("missing_profitability_evidence")
@@ -99,6 +102,7 @@ def build_paper_progress(
         profitability_ready = profitability.get("ready") is True
         net_pnl = _optional_float(profitability.get("net_pnl"))
         max_drawdown = _optional_float(profitability.get("max_drawdown"))
+        cash_drawdown = _optional_float(profitability.get("cash_drawdown"))
         reconciled = profitability.get("reconciled") is True
         if not profitability_ready:
             failed.extend(str(reason) for reason in profitability.get("failed_reasons", []))
@@ -122,6 +126,7 @@ def build_paper_progress(
         profitability_ready=profitability_ready,
         net_pnl=net_pnl,
         max_drawdown=max_drawdown,
+        cash_drawdown=cash_drawdown,
         reconciled=reconciled,
         ready_for_live_review=ready,
         failed_reasons=tuple(failed),

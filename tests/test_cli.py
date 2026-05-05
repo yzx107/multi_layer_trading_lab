@@ -2329,6 +2329,7 @@ def test_paper_progress_cli_writes_progress_report(tmp_path) -> None:
                 "ready": False,
                 "net_pnl": -25.0,
                 "max_drawdown": -100.0,
+                "cash_drawdown": -800.0,
                 "reconciled": True,
                 "failed_reasons": ["net_pnl_not_positive"],
             }
@@ -2355,8 +2356,10 @@ def test_paper_progress_cli_writes_progress_report(tmp_path) -> None:
     assert "ready_for_live_review=false" in result.output
     assert "sessions_remaining=19" in result.output
     assert "net_pnl=-25.00" in result.output
+    assert "cash_drawdown=-800.00" in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["sessions_remaining"] == 19
+    assert report["cash_drawdown"] == -800.0
 
 
 def test_paper_session_calendar_cli_writes_next_action(tmp_path) -> None:
