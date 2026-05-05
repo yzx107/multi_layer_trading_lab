@@ -24,6 +24,7 @@ class ObjectiveAuditInput:
     paper_simulate_status_path: Path | None = None
     execution_log_path: Path | None = None
     broker_report_path: Path | None = None
+    paper_blocker_report_path: Path | None = None
 
 
 def _load_json(path: Path) -> dict[str, object]:
@@ -74,6 +75,7 @@ def _opend_runtime_ready(
     runtime_status_path: Path | None = None,
     account_status_path: Path | None = None,
     paper_simulate_status_path: Path | None = None,
+    paper_blocker_report_path: Path | None = None,
 ) -> tuple[bool, dict[str, object], list[str]]:
     failed: list[str] = []
     evidence: dict[str, object] = {
@@ -83,6 +85,9 @@ def _opend_runtime_ready(
         "account_status_path": str(account_status_path) if account_status_path else None,
         "paper_simulate_status_path": (
             str(paper_simulate_status_path) if paper_simulate_status_path else None
+        ),
+        "paper_blocker_report_path": (
+            str(paper_blocker_report_path) if paper_blocker_report_path else None
         ),
     }
     if runtime_status_path is None or not runtime_status_path.exists():
@@ -162,7 +167,33 @@ def _opend_runtime_ready(
         ):
             failed.extend(str(reason) for reason in paper_status.get("failed_reasons", []))
 
-    return not failed, evidence, list(dict.fromkeys(failed))
+    blocker_ready, blocker_payload, blocker_failed = _paper_blocker_ready(
+        paper_blocker_report_path
+    )
+    if blocker_payload is not None:
+        evidence["paper_blocker_report"] = blocker_payload
+    failed.extend(blocker_failed)
+
+    return not failed and blocker_ready, evidence, list(dict.fromkeys(failed))
+
+
+def _paper_blocker_ready(
+    path: Path | None,
+) -> tuple[bool, dict[str, object] | None, list[str]]:
+    if path is None:
+        return True, None, []
+    if not path.exists():
+        return False, None, ["missing_paper_blocker_report"]
+    payload = _load_json(path)
+    failed: list[str] = []
+    if payload.get("ready_for_next_session") is not True:
+        reasons = [
+            str(reason)
+            for reason in payload.get("next_session_failed_reasons", [])
+            if str(reason)
+        ]
+        failed.extend(reasons or ["paper_next_session_not_ready"])
+    return not failed, payload, list(dict.fromkeys(failed))
 
 
 def _positive_float(value: object) -> bool:
@@ -313,6 +344,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.opend_runtime_status_path,
         input_data.opend_account_status_path,
         input_data.paper_simulate_status_path,
+        input_data.paper_blocker_report_path,
     )
     paper_ledger, paper_ledger_failed = _paper_ledger_evidence(
         execution_log_path=input_data.execution_log_path,
@@ -491,6 +523,11 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             if input_data.paper_simulate_status_path is not None
             else None
         ),
+        "paper_blocker_report_path": (
+            str(input_data.paper_blocker_report_path)
+            if input_data.paper_blocker_report_path is not None
+            else None
+        ),
         "execution_log_path": (
             str(input_data.execution_log_path)
             if input_data.execution_log_path is not None
@@ -514,6 +551,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             opend_runtime_status_path=input_data.opend_runtime_status_path,
             opend_account_status_path=input_data.opend_account_status_path,
             paper_simulate_status_path=input_data.paper_simulate_status_path,
+            paper_blocker_report_path=input_data.paper_blocker_report_path,
             execution_log_path=input_data.execution_log_path,
             broker_report_path=input_data.broker_report_path,
         ),
@@ -706,6 +744,7 @@ def _prompt_to_artifact_checklist(
     opend_runtime_status_path: Path | None,
     opend_account_status_path: Path | None,
     paper_simulate_status_path: Path | None,
+    paper_blocker_report_path: Path | None,
     execution_log_path: Path | None,
     broker_report_path: Path | None,
 ) -> list[dict[str, object]]:
@@ -739,7 +778,9 @@ def _prompt_to_artifact_checklist(
             str(opend_quote_snapshot_path) if opend_quote_snapshot_path else None,
             str(opend_ticket_response_path) if opend_ticket_response_path else None,
             str(paper_simulate_status_path) if paper_simulate_status_path else None,
+            str(paper_blocker_report_path) if paper_blocker_report_path else None,
             "src/multi_layer_trading_lab/execution/opend_tickets.py",
+            "src/multi_layer_trading_lab/execution/paper_blocker_report.py",
         ],
         "million_scale_personal_account_risk": [
             str(readiness_manifest_path),
@@ -808,6 +849,9 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
         if str(reason)
     ]
     if requirement == "opend_execution_gate":
+        blocker_action = _paper_blocker_next_action(check.get("evidence"))
+        if blocker_action:
+            return blocker_action
         paper_action = _opend_paper_simulate_next_action(check.get("evidence"))
         if paper_action:
             return paper_action
@@ -904,6 +948,19 @@ def _opend_paper_simulate_next_action(evidence: object) -> str | None:
     if not isinstance(paper_status, dict):
         return None
     action = paper_status.get("next_required_action")
+    return str(action) if action else None
+
+
+def _paper_blocker_next_action(evidence: object) -> str | None:
+    if not isinstance(evidence, dict):
+        return None
+    runtime = evidence.get("runtime")
+    if not isinstance(runtime, dict):
+        return None
+    blocker = runtime.get("paper_blocker_report")
+    if not isinstance(blocker, dict):
+        return None
+    action = blocker.get("next_required_action")
     return str(action) if action else None
 
 

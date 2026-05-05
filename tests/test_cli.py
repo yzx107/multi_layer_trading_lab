@@ -2102,6 +2102,7 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     execution_log = tmp_path / "execution.jsonl"
     broker_report = tmp_path / "broker.json"
+    blocker = tmp_path / "paper_blocker.json"
     output = tmp_path / "objective_audit.json"
     readiness.write_text(
         json.dumps(
@@ -2127,6 +2128,18 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
         json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-05 10:00:00"}]),
         encoding="utf-8",
     )
+    blocker.write_text(
+        json.dumps(
+            {
+                "ready_for_next_session": False,
+                "next_session_failed_reasons": ["opend_kill_switch_enabled"],
+                "next_required_action": (
+                    "clear_opend_kill_switch_then_resubmit_paper_simulate"
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -2140,6 +2153,8 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
             str(execution_log),
             "--broker-report-path",
             str(broker_report),
+            "--paper-blocker-report-path",
+            str(blocker),
         ],
     )
 
@@ -2153,6 +2168,15 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
     assert (
         paper_check["evidence"]["paper_session_ledger"]["inferred_session_count"]
         == 1
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+    assert (
+        opend_check["evidence"]["runtime"]["paper_blocker_report"][
+            "next_required_action"
+        ]
+        == "clear_opend_kill_switch_then_resubmit_paper_simulate"
     )
 
 

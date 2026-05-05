@@ -2415,6 +2415,7 @@ def objective_audit(
     paper_simulate_status_path: str | None = None,
     execution_log_path: str | None = None,
     broker_report_path: str | None = None,
+    paper_blocker_report_path: str | None = None,
 ) -> None:
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -2446,6 +2447,9 @@ def objective_audit(
             else None,
             execution_log_path=Path(execution_log_path) if execution_log_path else None,
             broker_report_path=Path(broker_report_path) if broker_report_path else None,
+            paper_blocker_report_path=Path(paper_blocker_report_path)
+            if paper_blocker_report_path
+            else None,
         )
     )
     typer.echo(f"objective_achieved={str(audit['objective_achieved']).lower()}")

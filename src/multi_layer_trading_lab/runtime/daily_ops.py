@@ -471,6 +471,10 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         objective_audit_command.extend(
             ["--paper-simulate-status-path", str(plan.paper_simulate_status_path)]
         )
+    if plan.paper_blocker_report_path is not None:
+        objective_audit_command.extend(
+            ["--paper-blocker-report-path", str(plan.paper_blocker_report_path)]
+        )
     if plan.execution_log_path is not None:
         objective_audit_command.extend(
             ["--execution-log-path", str(plan.execution_log_path)]

@@ -411,11 +411,12 @@ python3 -m venv .venv
   --opend-account-status-path data/logs/opend_account_status.json \
   --opend-quote-snapshot-path data/logs/opend_quote_snapshot.json \
   --opend-ticket-response-path data/logs/opend_paper_ticket_responses.jsonl \
+  --paper-blocker-report-path data/logs/paper_blocker_report.json \
   --execution-log-path data/logs/execution_log.paper_combined.jsonl \
   --broker-report-path data/logs/futu_order_report.paper_combined.json
 ```
 
-这个命令不会用测试绿灯代替真实交易证据；缺少真实 OpenD runtime/account/quote/response、真实 paper/live 正收益、broker 对账、真实 adapter 或上线门禁时会保持 `objective_achieved=false`。传入 execution/broker 路径后，`paper_to_live_execution_evidence` 会直接引用 `paper-session-ledger` 的 broker-backed session 数并给出剩余 session。
+这个命令不会用测试绿灯代替真实交易证据；缺少真实 OpenD runtime/account/quote/response、真实 paper/live 正收益、broker 对账、真实 adapter 或上线门禁时会保持 `objective_achieved=false`。传入 paper blocker report 后，`opend_execution_gate` 会引用聚合的下一 session blocker；传入 execution/broker 路径后，`paper_to_live_execution_evidence` 会直接引用 `paper-session-ledger` 的 broker-backed session 数并给出剩余 session。
 
 Mac mini 日常运行入口：
 
