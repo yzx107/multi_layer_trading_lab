@@ -1502,6 +1502,9 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
             return "refresh_profitability_evidence"
         if "stale_paper_progress" in failed:
             return "refresh_paper_progress"
+        evidence_action = _first_next_required_evidence_action(check.get("evidence"))
+        if evidence_action:
+            return evidence_action
         if _has_any(
             failed,
             [
@@ -1576,6 +1579,11 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
     if requirement == "million_scale_personal_account_risk":
         return "rerun_million_scale_risk_precheck"
     return "inspect_blocked_requirement"
+
+
+def _first_next_required_evidence_action(evidence: object) -> str | None:
+    actions = _next_required_evidence_actions(evidence)
+    return actions[0] if actions else None
 
 
 def _opend_paper_simulate_next_action(evidence: object) -> str | None:

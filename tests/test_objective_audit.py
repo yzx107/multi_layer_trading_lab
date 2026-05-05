@@ -1329,6 +1329,81 @@ def test_objective_audit_uses_paper_progress_for_profitability_next_action(
     )
 
 
+def test_objective_audit_prefers_paper_progress_evidence_action(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    progress = tmp_path / "paper_progress.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [],
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": False},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "ready": False,
+                "paper_sessions": 1,
+                "inferred_session_count": 1,
+                "session_dates": ["2026-04-01"],
+                "execution_log_rows": 1,
+                "broker_report_rows": 1,
+                "net_pnl": -25.0,
+                "max_drawdown": -25.0,
+                "reconciled": True,
+                "failed_reasons": ["net_pnl_not_positive"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    progress.write_text(
+        json.dumps(
+            {
+                "ready_for_live_review": False,
+                "sessions_remaining": 19,
+                "failed_reasons": [
+                    "paper_sessions_remaining",
+                    "net_pnl_not_positive",
+                ],
+                "next_required_evidence": [
+                    "collect_19_broker_reconciled_paper_sessions",
+                    "continue_until_positive_reconciled_net_pnl",
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            paper_progress_path=progress,
+        )
+    )
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "profitable_reconciled_paper_or_live_evidence"
+    ][0]
+
+    assert (
+        checklist_item["next_required_action"]
+        == "collect_19_broker_reconciled_paper_sessions"
+    )
+
+
 def test_objective_audit_blocks_stale_paper_progress(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
