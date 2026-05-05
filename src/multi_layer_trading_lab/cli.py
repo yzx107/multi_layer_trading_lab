@@ -1905,6 +1905,7 @@ def fetch_opend_account_status(
     output_path: str = "data/logs/opend_account_status.json",
     base_url: str = "http://127.0.0.1:8766",
     timeout_seconds: float = 8.0,
+    require_paper_simulate_ready: bool = False,
 ) -> None:
     try:
         status = read_opend_account_status(
@@ -1925,6 +1926,10 @@ def fetch_opend_account_status(
     typer.echo(f"opend_account_status={output}")
     if status["failed_reasons"]:
         typer.echo(f"failed_reasons={','.join(status['failed_reasons'])}")
+    if require_paper_simulate_ready and not status["ready_for_paper_simulate"]:
+        typer.echo("status=blocked")
+        typer.echo("failed_reason=opend_account_not_ready_for_paper_simulate")
+        raise typer.Exit(1)
 
 
 @app.command()

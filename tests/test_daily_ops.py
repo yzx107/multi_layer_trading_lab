@@ -151,6 +151,51 @@ def test_run_daily_ops_plan_writes_diagnostics_after_runtime_submission_block(
     assert any(result.returncode == 1 for result in results)
 
 
+def test_run_daily_ops_plan_writes_diagnostics_after_account_submission_block(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    commands_seen: list[str] = []
+
+    def fake_run(command, check, capture_output, text):
+        del check, capture_output, text
+        command_name = command[3]
+        commands_seen.append(command_name)
+        returncode = 1 if command_name == "fetch-opend-account-status" else 0
+        return subprocess.CompletedProcess(
+            command,
+            returncode,
+            stdout=f"{command_name}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("multi_layer_trading_lab.runtime.daily_ops.subprocess.run", fake_run)
+
+    results = run_daily_ops_plan(
+        DailyOpsPlan(
+            python_executable=".venv/bin/python",
+            lake_root=tmp_path / "lake",
+            report_path=tmp_path / "ops.md",
+            readiness_path=tmp_path / "readiness.json",
+            objective_audit_path=tmp_path / "objective.json",
+            objective_audit_report_path=tmp_path / "objective.md",
+            paper_blocker_report_path=tmp_path / "blocker.json",
+            export_opend_ticket_path=tmp_path / "tickets.jsonl",
+            opend_ticket_response_path=tmp_path / "responses.jsonl",
+            submit_opend_paper_simulate_tickets=True,
+        )
+    )
+
+    assert "fetch-opend-runtime-status" in commands_seen
+    assert "fetch-opend-account-status" in commands_seen
+    assert "export-opend-paper-tickets" not in commands_seen
+    assert "submit-opend-paper-tickets" not in commands_seen
+    assert "paper-blocker-report" in commands_seen
+    assert "ops-report" in commands_seen
+    assert "objective-audit" in commands_seen
+    assert any(result.returncode == 1 for result in results)
+
+
 def test_build_daily_ops_commands_can_ingest_ifind_events_file() -> None:
     commands = build_daily_ops_commands(
         DailyOpsPlan(
@@ -298,6 +343,7 @@ def test_build_daily_ops_commands_can_submit_exported_paper_simulate_tickets() -
         "multi_layer_trading_lab.cli",
         "fetch-opend-account-status",
     ]
+    assert "--require-paper-simulate-ready" in commands[8]
     assert commands[9][3] == "export-opend-paper-tickets"
     assert commands[10][:4] == [
         ".venv/bin/python",
@@ -340,6 +386,7 @@ def test_build_daily_ops_commands_can_require_calendar_collect_before_simulate_s
     assert commands[7][3] == "fetch-opend-runtime-status"
     assert "--require-order-submission-ready" in commands[7]
     assert commands[8][3] == "fetch-opend-account-status"
+    assert "--require-paper-simulate-ready" in commands[8]
     assert commands[9][3] == "export-opend-paper-tickets"
     assert commands[10][3] == "paper-session-calendar"
     assert "--require-collect-today" in commands[10]
@@ -373,6 +420,7 @@ def test_build_daily_ops_commands_can_submit_and_build_paper_simulate_evidence()
     assert commands[7][3] == "fetch-opend-runtime-status"
     assert "--require-order-submission-ready" in commands[7]
     assert commands[8][3] == "fetch-opend-account-status"
+    assert "--require-paper-simulate-ready" in commands[8]
     assert commands[9][3] == "export-opend-paper-tickets"
     assert commands[10][3] == "submit-opend-paper-tickets"
     assert "--allow-failed-resubmit" in commands[10]

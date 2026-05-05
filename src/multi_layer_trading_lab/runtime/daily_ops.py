@@ -167,6 +167,7 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
                     "fetch-opend-account-status",
                     "--output-path",
                     str(plan.opend_account_status_path),
+                    "--require-paper-simulate-ready",
                 ]
             )
         export_ticket_command = [

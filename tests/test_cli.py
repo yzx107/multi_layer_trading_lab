@@ -1116,6 +1116,34 @@ def test_fetch_opend_account_status_cli_blocks_when_web_api_unavailable(tmp_path
     assert not (tmp_path / "account_status.json").exists()
 
 
+def test_fetch_opend_account_status_cli_can_require_paper_simulate_ready(
+    tmp_path,
+) -> None:
+    output = tmp_path / "account_status.json"
+    with patch("multi_layer_trading_lab.cli.read_opend_account_status") as mocked:
+        mocked.return_value = {
+            "ready_for_paper_simulate": False,
+            "simulate_account_count": 1,
+            "hk_stock_simulate_account_count": 0,
+            "failed_reasons": ["missing_hk_stock_simulate_account"],
+        }
+        result = CliRunner().invoke(
+            app,
+            [
+                "fetch-opend-account-status",
+                "--output-path",
+                str(output),
+                "--require-paper-simulate-ready",
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert output.exists()
+    assert "ready_for_paper_simulate=false" in result.output
+    assert "missing_hk_stock_simulate_account" in result.output
+    assert "opend_account_not_ready_for_paper_simulate" in result.output
+
+
 def test_extract_futu_web_report_cli_writes_broker_report(tmp_path) -> None:
     web_log = tmp_path / "web.jsonl"
     output = tmp_path / "futu.json"
