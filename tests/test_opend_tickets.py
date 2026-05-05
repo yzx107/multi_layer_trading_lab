@@ -199,6 +199,9 @@ def test_fetch_opend_account_status_detects_hk_stock_sim_account() -> None:
     assert status["simulate_account_count"] == 1
     assert status["hk_stock_simulate_account_count"] == 1
     assert status["failed_reasons"] == []
+    assert status["configured_acc_id"] == "***5085"
+    assert status["accounts"][0]["acc_id"] == "***5085"
+    assert status["accounts"][1]["acc_id"] == "***1974"
 
 
 def test_fetch_opend_account_status_blocks_without_hk_stock_sim_account() -> None:
@@ -223,6 +226,7 @@ def test_fetch_opend_account_status_blocks_without_hk_stock_sim_account() -> Non
 
     assert status["ready_for_paper_simulate"] is False
     assert status["failed_reasons"] == ["missing_hk_stock_simulate_account"]
+    assert status["accounts"][0]["acc_id"] == "***"
 
 
 def test_submit_opend_paper_tickets_posts_dry_run_payload(tmp_path) -> None:

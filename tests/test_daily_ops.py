@@ -101,6 +101,8 @@ def test_build_daily_ops_commands_runs_report_then_readiness() -> None:
     assert "data/logs/readiness.json" in commands[9]
     assert "--ifind-ingestion-status-path" in commands[9]
     assert "data/logs/ifind_ingestion_status.json" in commands[9]
+    assert "--opend-account-status-path" in commands[9]
+    assert "data/logs/opend_account_status.json" in commands[9]
     assert "--audit-path" in commands[10]
     assert "data/logs/objective_audit.json" in commands[10]
 

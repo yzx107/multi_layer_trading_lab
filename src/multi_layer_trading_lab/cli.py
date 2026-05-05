@@ -2397,6 +2397,7 @@ def objective_audit(
     ifind_validation_report_path: str | None = "data/logs/ifind_events_validation.json",
     ifind_ingestion_status_path: str | None = "data/logs/ifind_ingestion_status.json",
     opend_runtime_status_path: str | None = "data/logs/opend_runtime_status.json",
+    opend_account_status_path: str | None = "data/logs/opend_account_status.json",
     opend_quote_snapshot_path: str | None = "data/logs/opend_quote_snapshot.json",
     opend_ticket_response_path: str | None = "data/logs/opend_paper_ticket_responses.jsonl",
     paper_simulate_status_path: str | None = None,
@@ -2416,6 +2417,9 @@ def objective_audit(
             else None,
             opend_runtime_status_path=Path(opend_runtime_status_path)
             if opend_runtime_status_path
+            else None,
+            opend_account_status_path=Path(opend_account_status_path)
+            if opend_account_status_path
             else None,
             opend_quote_snapshot_path=Path(opend_quote_snapshot_path)
             if opend_quote_snapshot_path

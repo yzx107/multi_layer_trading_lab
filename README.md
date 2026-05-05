@@ -405,11 +405,13 @@ python3 -m venv .venv
   --profitability-evidence-path data/logs/profitability_evidence.json \
   --ifind-validation-report-path data/logs/ifind_events_validation.json \
   --ifind-ingestion-status-path data/logs/ifind_ingestion_status.json \
+  --opend-runtime-status-path data/logs/opend_runtime_status.json \
+  --opend-account-status-path data/logs/opend_account_status.json \
   --opend-quote-snapshot-path data/logs/opend_quote_snapshot.json \
   --opend-ticket-response-path data/logs/opend_paper_ticket_responses.jsonl
 ```
 
-这个命令不会用测试绿灯代替真实交易证据；缺少真实 OpenD quote/response、真实 paper/live 正收益、broker 对账、真实 adapter 或上线门禁时会保持 `objective_achieved=false`。
+这个命令不会用测试绿灯代替真实交易证据；缺少真实 OpenD runtime/account/quote/response、真实 paper/live 正收益、broker 对账、真实 adapter 或上线门禁时会保持 `objective_achieved=false`。
 
 Mac mini 日常运行入口：
 
@@ -493,7 +495,7 @@ daily ops 的 `paper-session-plan` 会默认消费 `data/logs/opend_quote_snapsh
 ```
 
 这条路径仍不会触碰 live：ticket 保持 `real=false` / `submit_real=false`，提交时只加 `paper=true`。它适合生成单日 paper 证据；晋级仍必须用合并后的 20-session evidence。
-启用 `--submit-opend-paper-simulate-tickets` 时，daily ops 会先检查 OpenD runtime 和 `/api/accounts`；如果 kill-switch 已开启、OpenD 未 ready、或没有 HK 股票模拟账户，会跳过提交动作，但仍生成 blocker report / readiness / objective audit，最后以非零退出提示当天没有进入 paper 提交。
+启用 `--submit-opend-paper-simulate-tickets` 时，daily ops 会先检查 OpenD runtime 和 `/api/accounts`；如果 kill-switch 已开启、OpenD 未 ready、或没有 HK 股票模拟账户，会跳过提交动作，但仍生成 blocker report / readiness / objective audit，最后以非零退出提示当天没有进入 paper 提交。写入日志的 account status 默认脱敏 `acc_id` / `card_num` / `uni_card_num`，避免把券商账号标识放进长期审计文件。
 
 `submit-opend-paper-tickets` 默认带幂等保护：如果 output response JSONL 已经存在同一个 `ticket_id`，会在本地返回 `ticket_already_submitted:<ticket_id>`，不会再次调用 OpenD。只有确知要重提同一张 ticket 时才显式加 `--allow-resubmit`。daily ops 的 paper SIMULATE 路径默认只允许重试已经失败的 response（`--allow-failed-resubmit`），例如 kill-switch 拒单后清理 kill-switch 再跑；已经有成功提交 response 的 ticket 仍会被阻断。
 

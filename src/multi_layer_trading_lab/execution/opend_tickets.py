@@ -179,7 +179,14 @@ def fetch_opend_account_status(
         and str(account.get("sim_acc_type") or "").upper() in {"STOCK", "N/A", ""}
     ]
     return {
-        **payload,
+        "ok": payload.get("ok", True),
+        "configured_acc_id": _redact_identifier(payload.get("configured_acc_id")),
+        "configured_acc_index": payload.get("configured_acc_index"),
+        "accounts": [
+            _sanitize_account_summary(account)
+            for account in accounts
+            if isinstance(account, dict)
+        ],
         "simulate_account_count": len(sim_accounts),
         "hk_stock_simulate_account_count": len(hk_stock_sim_accounts),
         "ready_for_paper_simulate": bool(hk_stock_sim_accounts),
@@ -187,6 +194,37 @@ def fetch_opend_account_status(
         if hk_stock_sim_accounts
         else ["missing_hk_stock_simulate_account"],
     }
+
+
+def _sanitize_account_summary(account: dict[str, object]) -> dict[str, object]:
+    allowed_keys = {
+        "trd_env",
+        "sim_acc_type",
+        "trdmarket_auth",
+        "acc_type",
+        "acc_role",
+        "acc_status",
+        "security_firm",
+    }
+    summary = {key: account.get(key) for key in allowed_keys if key in account}
+    if "acc_id" in account:
+        summary["acc_id"] = _redact_identifier(account.get("acc_id"))
+    if "card_num" in account:
+        summary["card_num"] = _redact_identifier(account.get("card_num"))
+    if "uni_card_num" in account:
+        summary["uni_card_num"] = _redact_identifier(account.get("uni_card_num"))
+    return summary
+
+
+def _redact_identifier(value: object) -> str | None:
+    if value in {None, ""}:
+        return None
+    text = str(value)
+    if text.upper() == "N/A":
+        return "N/A"
+    if len(text) <= 4:
+        return "***"
+    return f"***{text[-4:]}"
 
 
 def fetch_opend_runtime_status(

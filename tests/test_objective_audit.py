@@ -9,6 +9,37 @@ from multi_layer_trading_lab.reports.objective_audit import (
 )
 
 
+def _write_ready_opend_account_status(path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "configured_acc_id": 281756479117805085,
+                "accounts": [
+                    {
+                        "acc_id": 281756479117805085,
+                        "card_num": "1001302006092966",
+                        "uni_card_num": "1001253358518586",
+                        "trd_env": "REAL",
+                    },
+                    {
+                        "acc_id": 15091974,
+                        "card_num": "N/A",
+                        "uni_card_num": "N/A",
+                        "trd_env": "SIMULATE",
+                        "sim_acc_type": "STOCK",
+                        "trdmarket_auth": ["HK"],
+                    },
+                ],
+                "ready_for_paper_simulate": True,
+                "simulate_account_count": 1,
+                "hk_stock_simulate_account_count": 1,
+                "failed_reasons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_objective_audit_blocks_without_profitability_and_live_adapters(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     ifind_validation = tmp_path / "ifind_validation.json"
@@ -162,6 +193,7 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
     quote = tmp_path / "quote.json"
     responses = tmp_path / "responses.jsonl"
     runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
     output = tmp_path / "audit.json"
     readiness.write_text(
         json.dumps(
@@ -215,6 +247,7 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
         json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
         encoding="utf-8",
     )
+    _write_ready_opend_account_status(account)
 
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -224,6 +257,7 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
             opend_quote_snapshot_path=quote,
             opend_ticket_response_path=responses,
             opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
         )
     )
 
@@ -231,6 +265,13 @@ def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) ->
     assert audit["blocked_requirements"] == []
     assert audit["completion_decision"]["status"] == "achieved"
     assert all(item["status"] == "passed" for item in audit["prompt_to_artifact_checklist"])
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+    account_status = opend_check["evidence"]["runtime"]["account_status"]
+    assert account_status["configured_acc_id"] == "***5085"
+    assert account_status["accounts"][0]["card_num"] == "***2966"
+    assert account_status["accounts"][1]["acc_id"] == "***1974"
 
 
 def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> None:
@@ -239,6 +280,7 @@ def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> No
     quote = tmp_path / "quote.json"
     responses = tmp_path / "responses.jsonl"
     runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
     output = tmp_path / "audit.json"
     readiness.write_text(
         json.dumps(
@@ -297,6 +339,7 @@ def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> No
         json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
         encoding="utf-8",
     )
+    _write_ready_opend_account_status(account)
 
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -306,6 +349,7 @@ def test_objective_audit_propagates_profitability_failed_reasons(tmp_path) -> No
             opend_quote_snapshot_path=quote,
             opend_ticket_response_path=responses,
             opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
         )
     )
     profit_check = [
@@ -422,6 +466,7 @@ def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
     assert audit["objective_achieved"] is False
     assert "opend_execution_gate" in audit["blocked_requirements"]
     assert "missing_opend_runtime_status" in opend_check["failed_reasons"]
+    assert "missing_opend_account_status" in opend_check["failed_reasons"]
     assert "missing_opend_quote_snapshot" in opend_check["failed_reasons"]
     assert "missing_opend_ticket_response" in opend_check["failed_reasons"]
 
@@ -432,6 +477,7 @@ def test_objective_audit_blocks_opend_kill_switch_runtime_status(tmp_path) -> No
     quote = tmp_path / "quote.json"
     responses = tmp_path / "responses.jsonl"
     runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
     output = tmp_path / "audit.json"
     readiness.write_text(
         json.dumps(
@@ -491,6 +537,7 @@ def test_objective_audit_blocks_opend_kill_switch_runtime_status(tmp_path) -> No
         ),
         encoding="utf-8",
     )
+    _write_ready_opend_account_status(account)
 
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -500,6 +547,7 @@ def test_objective_audit_blocks_opend_kill_switch_runtime_status(tmp_path) -> No
             opend_quote_snapshot_path=quote,
             opend_ticket_response_path=responses,
             opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
         )
     )
     opend_check = [
@@ -518,6 +566,7 @@ def test_objective_audit_requires_submitted_opend_ticket_response(tmp_path) -> N
     quote = tmp_path / "quote.json"
     responses = tmp_path / "responses.jsonl"
     runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
     output = tmp_path / "audit.json"
     readiness.write_text(
         json.dumps(
@@ -571,6 +620,7 @@ def test_objective_audit_requires_submitted_opend_ticket_response(tmp_path) -> N
         json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
         encoding="utf-8",
     )
+    _write_ready_opend_account_status(account)
 
     audit = build_objective_audit(
         ObjectiveAuditInput(
@@ -580,6 +630,7 @@ def test_objective_audit_requires_submitted_opend_ticket_response(tmp_path) -> N
             opend_quote_snapshot_path=quote,
             opend_ticket_response_path=responses,
             opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
         )
     )
     opend_check = [
@@ -593,12 +644,107 @@ def test_objective_audit_requires_submitted_opend_ticket_response(tmp_path) -> N
     assert opend_check["evidence"]["runtime"]["failed_ticket_response_rows"] == 0
 
 
+def test_objective_audit_requires_ready_paper_simulate_account(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    profitability = tmp_path / "profitability.json"
+    quote = tmp_path / "quote.json"
+    responses = tmp_path / "responses.jsonl"
+    runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": True,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100}
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": True},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    profitability.write_text(
+        json.dumps(
+            {
+                "paper_sessions": 20,
+                "net_pnl": 1200.0,
+                "max_drawdown": -3000.0,
+                "max_allowed_drawdown": 10_000.0,
+                "reconciled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote.write_text(
+        json.dumps({"quote": {"symbol": "HK.00700", "lot_size": 100, "last_price": 320.0}}),
+        encoding="utf-8",
+    )
+    responses.write_text(
+        '{"ticket_id":"paper-001","response":{"submitted":true}}\n',
+        encoding="utf-8",
+    )
+    runtime.write_text(
+        json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
+        encoding="utf-8",
+    )
+    account.write_text(
+        json.dumps(
+            {
+                "ready_for_paper_simulate": False,
+                "simulate_account_count": 1,
+                "hk_stock_simulate_account_count": 0,
+                "failed_reasons": ["missing_hk_stock_simulate_account"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            profitability_evidence_path=profitability,
+            opend_quote_snapshot_path=quote,
+            opend_ticket_response_path=responses,
+            opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert audit["objective_achieved"] is False
+    assert "opend_execution_gate" in audit["blocked_requirements"]
+    assert "missing_hk_stock_simulate_account" in opend_check["failed_reasons"]
+    assert "opend_account_not_ready_for_paper_simulate" in opend_check["failed_reasons"]
+    assert opend_check["evidence"]["runtime"]["account_status"]["ready_for_paper_simulate"] is False
+
+
 def test_objective_audit_uses_paper_simulate_status_failed_reasons(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
     quote = tmp_path / "quote.json"
     responses = tmp_path / "responses.jsonl"
     runtime = tmp_path / "runtime.json"
+    account = tmp_path / "account.json"
     paper_status = tmp_path / "paper_status.json"
     output = tmp_path / "audit.json"
     readiness.write_text(
@@ -653,6 +799,7 @@ def test_objective_audit_uses_paper_simulate_status_failed_reasons(tmp_path) -> 
         json.dumps({"ready_for_order_submission": True, "failed_reasons": []}),
         encoding="utf-8",
     )
+    _write_ready_opend_account_status(account)
     paper_status.write_text(
         json.dumps(
             {
@@ -671,6 +818,7 @@ def test_objective_audit_uses_paper_simulate_status_failed_reasons(tmp_path) -> 
             opend_quote_snapshot_path=quote,
             opend_ticket_response_path=responses,
             opend_runtime_status_path=runtime,
+            opend_account_status_path=account,
             paper_simulate_status_path=paper_status,
         )
     )

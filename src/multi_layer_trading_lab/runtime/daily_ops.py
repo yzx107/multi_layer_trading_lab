@@ -452,6 +452,10 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         objective_audit_command.extend(
             ["--opend-runtime-status-path", str(plan.opend_runtime_status_path)]
         )
+    if plan.opend_account_status_path is not None:
+        objective_audit_command.extend(
+            ["--opend-account-status-path", str(plan.opend_account_status_path)]
+        )
     if plan.opend_ticket_response_path is not None:
         objective_audit_command.extend(
             ["--opend-ticket-response-path", str(plan.opend_ticket_response_path)]

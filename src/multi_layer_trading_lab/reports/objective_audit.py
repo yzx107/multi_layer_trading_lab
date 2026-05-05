@@ -15,6 +15,7 @@ class ObjectiveAuditInput:
     opend_quote_snapshot_path: Path | None = None
     opend_ticket_response_path: Path | None = None
     opend_runtime_status_path: Path | None = None
+    opend_account_status_path: Path | None = None
     paper_simulate_status_path: Path | None = None
 
 
@@ -56,6 +57,7 @@ def _opend_runtime_ready(
     quote_snapshot_path: Path | None,
     ticket_response_path: Path | None,
     runtime_status_path: Path | None = None,
+    account_status_path: Path | None = None,
     paper_simulate_status_path: Path | None = None,
 ) -> tuple[bool, dict[str, object], list[str]]:
     failed: list[str] = []
@@ -63,6 +65,7 @@ def _opend_runtime_ready(
         "quote_snapshot_path": str(quote_snapshot_path) if quote_snapshot_path else None,
         "ticket_response_path": str(ticket_response_path) if ticket_response_path else None,
         "runtime_status_path": str(runtime_status_path) if runtime_status_path else None,
+        "account_status_path": str(account_status_path) if account_status_path else None,
         "paper_simulate_status_path": (
             str(paper_simulate_status_path) if paper_simulate_status_path else None
         ),
@@ -76,6 +79,15 @@ def _opend_runtime_ready(
             failed.extend(str(reason) for reason in runtime_status.get("failed_reasons", []))
             if runtime_status.get("kill_switch") is True:
                 failed.append("opend_kill_switch_enabled")
+
+    if account_status_path is None or not account_status_path.exists():
+        failed.append("missing_opend_account_status")
+    else:
+        account_status = _load_json(account_status_path)
+        evidence["account_status"] = _sanitize_opend_account_status(account_status)
+        if account_status.get("ready_for_paper_simulate") is not True:
+            failed.extend(str(reason) for reason in account_status.get("failed_reasons", []))
+            failed.append("opend_account_not_ready_for_paper_simulate")
 
     if quote_snapshot_path is None or not quote_snapshot_path.exists():
         failed.append("missing_opend_quote_snapshot")
@@ -158,6 +170,39 @@ def _ticket_response_failed(row: dict[str, object]) -> bool:
     return isinstance(response, dict) and response.get("ok") is False
 
 
+def _sanitize_opend_account_status(payload: dict[str, object]) -> dict[str, object]:
+    sanitized = dict(payload)
+    if "configured_acc_id" in sanitized:
+        sanitized["configured_acc_id"] = _redact_identifier(sanitized.get("configured_acc_id"))
+    accounts = sanitized.get("accounts")
+    if isinstance(accounts, list):
+        sanitized["accounts"] = [
+            _sanitize_opend_account(account)
+            for account in accounts
+            if isinstance(account, dict)
+        ]
+    return sanitized
+
+
+def _sanitize_opend_account(account: dict[str, object]) -> dict[str, object]:
+    sanitized = dict(account)
+    for key in ["acc_id", "card_num", "uni_card_num"]:
+        if key in sanitized:
+            sanitized[key] = _redact_identifier(sanitized.get(key))
+    return sanitized
+
+
+def _redact_identifier(value: object) -> str | None:
+    if value in {None, ""}:
+        return None
+    text = str(value)
+    if text.upper() == "N/A":
+        return "N/A"
+    if len(text) <= 4:
+        return "***"
+    return f"***{text[-4:]}"
+
+
 def _ifind_validation_failed_reasons(payload: dict[str, object] | None) -> list[str]:
     if payload is None:
         return []
@@ -211,6 +256,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.opend_quote_snapshot_path,
         input_data.opend_ticket_response_path,
         input_data.opend_runtime_status_path,
+        input_data.opend_account_status_path,
         input_data.paper_simulate_status_path,
     )
     data_sources = {
@@ -356,6 +402,11 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             if input_data.opend_runtime_status_path is not None
             else None
         ),
+        "opend_account_status_path": (
+            str(input_data.opend_account_status_path)
+            if input_data.opend_account_status_path is not None
+            else None
+        ),
         "paper_simulate_status_path": (
             str(input_data.paper_simulate_status_path)
             if input_data.paper_simulate_status_path is not None
@@ -372,6 +423,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             opend_quote_snapshot_path=input_data.opend_quote_snapshot_path,
             opend_ticket_response_path=input_data.opend_ticket_response_path,
             opend_runtime_status_path=input_data.opend_runtime_status_path,
+            opend_account_status_path=input_data.opend_account_status_path,
             paper_simulate_status_path=input_data.paper_simulate_status_path,
         ),
         "blocked_requirements": blocked,
@@ -502,6 +554,7 @@ def _success_criteria() -> list[dict[str, object]]:
             "requirement": "Connect to OpenD through safe dry-run/paper/live-gated execution.",
             "minimum_evidence": [
                 "OpenD readiness approved for the requested mode",
+                "HK stock SIMULATE account available",
                 "real quote snapshot captured",
                 "submitted ticket response JSONL captured",
             ],
@@ -547,6 +600,7 @@ def _prompt_to_artifact_checklist(
     opend_quote_snapshot_path: Path | None,
     opend_ticket_response_path: Path | None,
     opend_runtime_status_path: Path | None,
+    opend_account_status_path: Path | None,
     paper_simulate_status_path: Path | None,
 ) -> list[dict[str, object]]:
     check_by_requirement = {str(check["requirement"]): check for check in checks}
@@ -575,6 +629,7 @@ def _prompt_to_artifact_checklist(
         "opend_execution_gate": [
             str(readiness_manifest_path),
             str(opend_runtime_status_path) if opend_runtime_status_path else None,
+            str(opend_account_status_path) if opend_account_status_path else None,
             str(opend_quote_snapshot_path) if opend_quote_snapshot_path else None,
             str(opend_ticket_response_path) if opend_ticket_response_path else None,
             str(paper_simulate_status_path) if paper_simulate_status_path else None,
@@ -664,7 +719,7 @@ def _next_required_evidence(requirement: str) -> str:
         ),
         "opend_execution_gate": (
             "Capture an OpenD quote snapshot and at least one submitted ticket response "
-            "JSONL row from the execution API."
+            "JSONL row from the execution API, with a ready HK stock SIMULATE account."
         ),
         "hk_l2_data_reuse": (
             "Refresh Hshare verified evidence and intraday_l2_features freshness in "
