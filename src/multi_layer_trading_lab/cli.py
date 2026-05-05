@@ -114,6 +114,9 @@ from multi_layer_trading_lab.execution.reconciliation import (
 from multi_layer_trading_lab.execution.session_ledger import write_paper_session_ledger
 from multi_layer_trading_lab.features.daily.basic import build_daily_features
 from multi_layer_trading_lab.features.l2.basic import build_l2_bucket_features
+from multi_layer_trading_lab.features.l2.hshare_verified import (
+    build_hshare_verified_order_features,
+)
 from multi_layer_trading_lab.features.l2.order_add import build_order_add_bucket_features
 from multi_layer_trading_lab.pipelines.demo_pipeline import run_data_pipeline, run_demo_stack
 from multi_layer_trading_lab.pipelines.research_pipeline import run_research_workflow
@@ -790,6 +793,79 @@ def build_l2_order_add_features_from_lake(
     typer.echo(f"features_rows={features.height}")
     typer.echo(f"dataset={output_dataset}")
     typer.echo(f"output={output}")
+
+
+@app.command()
+def build_hshare_verified_l2_features(
+    verified_root: str = "/Volumes/Data/港股Tick数据/verified",
+    dates: str = "2026-04-01",
+    symbols: str = "00001.HK",
+    lake_root: str = "data/lake",
+    output_dataset: str = "intraday_l2_features",
+    bucket: str = "1m",
+    max_rows: int = 250_000,
+) -> None:
+    requested_dates = [item.strip() for item in dates.split(",") if item.strip()]
+    requested_tickers = [_normalize_hk_ticker(item) for item in symbols.split(",") if item.strip()]
+    frames: list[pl.DataFrame] = []
+    missing_dates: list[str] = []
+    for date_text in requested_dates:
+        trade_date = datetime.fromisoformat(date_text).date()
+        date_dir = (
+            Path(verified_root)
+            / "verified_orders"
+            / f"year={trade_date.year}"
+            / f"date={trade_date.isoformat()}"
+        )
+        files = sorted(date_dir.glob("*.parquet"))
+        if not files:
+            missing_dates.append(date_text)
+            continue
+        scan = (
+            pl.scan_parquet([str(path) for path in files])
+            .filter(pl.col("instrument_key").is_in(requested_tickers))
+            .select(["date", "instrument_key", "SendTime", "Price", "Volume"])
+        )
+        if max_rows > 0:
+            scan = scan.limit(max_rows)
+        frames.append(scan.collect())
+
+    orders = pl.concat(frames, how="diagonal_relaxed") if frames else pl.DataFrame()
+    if orders.is_empty():
+        typer.echo(f"requested_dates={len(requested_dates)}")
+        typer.echo(f"requested_symbols={len(requested_tickers)}")
+        typer.echo("orders_rows=0")
+        typer.echo("features_rows=0")
+        typer.echo("status=no_hshare_verified_orders")
+        if missing_dates:
+            typer.echo(f"missing_dates={','.join(missing_dates)}")
+        return
+
+    source_run_id = f"hshare-verified-orders-{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    features = build_hshare_verified_order_features(
+        orders,
+        bucket_size=bucket,
+        source_run_id=source_run_id,
+    )
+    output = ParquetStore(Path(lake_root)).write(output_dataset, features)
+    typer.echo(f"requested_dates={len(requested_dates)}")
+    typer.echo(f"requested_symbols={len(requested_tickers)}")
+    typer.echo(f"orders_rows={orders.height}")
+    typer.echo(f"features_rows={features.height}")
+    typer.echo(f"dataset={output_dataset}")
+    typer.echo(f"source_run_id={source_run_id}")
+    typer.echo(f"output={output}")
+    if missing_dates:
+        typer.echo(f"missing_dates={','.join(missing_dates)}")
+
+
+def _normalize_hk_ticker(symbol: str) -> str:
+    value = symbol.strip().upper()
+    if value.startswith("HK."):
+        value = value[3:]
+    if value.endswith(".HK"):
+        value = value[:-3]
+    return value.zfill(5) if value.isdigit() else value
 
 
 @app.command()

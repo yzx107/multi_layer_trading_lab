@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from zipfile import ZipFile
 
@@ -1673,6 +1673,45 @@ def test_build_l2_order_add_features_from_lake_cli_writes_features(tmp_path) -> 
     assert result.exit_code == 0
     assert "features_rows=1" in result.output
     assert (lake_root / "l2_order_add_features" / "part-000.parquet").exists()
+
+
+def test_build_hshare_verified_l2_features_cli_writes_intraday_features(tmp_path) -> None:
+    verified_root = tmp_path / "verified"
+    date_dir = verified_root / "verified_orders" / "year=2026" / "date=2026-04-01"
+    date_dir.mkdir(parents=True)
+    base = datetime(2026, 4, 1, 1, 20, tzinfo=UTC)
+    pl.DataFrame(
+        {
+            "date": [datetime(2026, 4, 1).date()] * 25,
+            "instrument_key": ["00001"] * 25,
+            "SendTime": [base + timedelta(minutes=idx) for idx in range(25)],
+            "Price": [61.0 + idx * 0.01 for idx in range(25)],
+            "Volume": [500 + idx for idx in range(25)],
+        }
+    ).write_parquet(date_dir / "part-00000.parquet")
+    lake_root = tmp_path / "lake"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build-hshare-verified-l2-features",
+            "--verified-root",
+            str(verified_root),
+            "--dates",
+            "2026-04-01",
+            "--symbols",
+            "00001.HK",
+            "--lake-root",
+            str(lake_root),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "features_rows=25" in result.output
+    features = pl.read_parquet(lake_root / "intraday_l2_features" / "part-000.parquet")
+    assert features["data_source"].to_list() == ["hshare_verified"] * 25
+    assert features["source_dataset"].to_list() == ["verified_orders"] * 25
+    assert features["security_id"].to_list()[0] == "HK.00001"
 
 
 def test_build_order_add_signals_from_lake_cli_writes_candidates(tmp_path) -> None:

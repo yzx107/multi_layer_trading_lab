@@ -606,6 +606,17 @@ paper 执行流程见 [PAPER_TRADING_RUNBOOK.md](/Users/yxin/AI_Workstation/Baye
 .venv/bin/python -m multi_layer_trading_lab.cli build-l2-features-from-lake --lake-root data/lake
 ```
 
+从 Hshare verified 层物化一个小而真实的本地 L2 特征样本，不重新做 raw 清洗：
+
+```bash
+.venv/bin/python -m multi_layer_trading_lab.cli build-hshare-verified-l2-features \
+  --verified-root /Volumes/Data/港股Tick数据/verified \
+  --dates 2026-04-01 \
+  --symbols 00001.HK \
+  --lake-root data/lake \
+  --max-rows 10000
+```
+
 查看并导入真实港股 Tick zip 中的 `OrderAdd` 事件：
 
 ```bash
