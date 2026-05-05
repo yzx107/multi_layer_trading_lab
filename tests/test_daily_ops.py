@@ -242,6 +242,8 @@ def test_build_daily_ops_commands_can_ingest_ifind_events_file() -> None:
     assert objective_audit_command[3] == "objective-audit"
     assert "--ifind-validation-report-path" in objective_audit_command
     assert "data/logs/ifind_validation.json" in objective_audit_command
+    assert "--paper-operator-handoff-path" in objective_audit_command
+    assert "data/logs/paper_operator_handoff.json" in objective_audit_command
 
 
 def test_build_daily_ops_commands_can_allow_lot_round_up_after_review() -> None:
@@ -506,6 +508,8 @@ def test_build_daily_ops_commands_can_include_real_paper_evidence_paths() -> Non
     assert "data/logs/research_input_manifest.json" in commands[14]
     assert "--paper-blocker-report-path" in commands[14]
     assert "data/logs/paper_blocker_report.json" in commands[14]
+    assert "--paper-operator-handoff-path" in commands[14]
+    assert "data/logs/paper_operator_handoff.json" in commands[14]
     assert "--paper-progress-path" in commands[14]
     assert "data/logs/paper_progress.json" in commands[14]
     assert "--execution-log-path" in commands[14]
@@ -563,6 +567,8 @@ def test_build_daily_ops_commands_can_build_full_paper_evidence_bundle() -> None
     assert "data/logs/profitability.json" in commands[14]
     assert "--paper-blocker-report-path" in commands[14]
     assert "data/logs/paper_blocker_report.json" in commands[14]
+    assert "--paper-operator-handoff-path" in commands[14]
+    assert "data/logs/paper_operator_handoff.json" in commands[14]
     assert "--paper-progress-path" in commands[14]
     assert "data/logs/paper_progress.json" in commands[14]
     assert "--execution-log-path" in commands[14]

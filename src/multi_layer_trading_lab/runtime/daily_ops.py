@@ -489,6 +489,10 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         objective_audit_command.extend(
             ["--paper-blocker-report-path", str(plan.paper_blocker_report_path)]
         )
+    if plan.paper_operator_handoff_path is not None:
+        objective_audit_command.extend(
+            ["--paper-operator-handoff-path", str(plan.paper_operator_handoff_path)]
+        )
     if plan.paper_progress_path is not None:
         objective_audit_command.extend(
             ["--paper-progress-path", str(plan.paper_progress_path)]
@@ -550,6 +554,8 @@ def run_daily_ops_plan(plan: DailyOpsPlan) -> list[subprocess.CompletedProcess[s
         plan.paper_progress_path.parent.mkdir(parents=True, exist_ok=True)
     if plan.paper_blocker_report_path is not None:
         plan.paper_blocker_report_path.parent.mkdir(parents=True, exist_ok=True)
+    if plan.paper_operator_handoff_path is not None:
+        plan.paper_operator_handoff_path.parent.mkdir(parents=True, exist_ok=True)
     if plan.paper_session_calendar_path is not None:
         plan.paper_session_calendar_path.parent.mkdir(parents=True, exist_ok=True)
     results = []

@@ -2219,6 +2219,7 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
     execution_log = tmp_path / "execution.jsonl"
     broker_report = tmp_path / "broker.json"
     blocker = tmp_path / "paper_blocker.json"
+    handoff = tmp_path / "paper_handoff.json"
     progress = tmp_path / "paper_progress.json"
     output = tmp_path / "objective_audit.json"
     readiness.write_text(
@@ -2257,6 +2258,18 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
         ),
         encoding="utf-8",
     )
+    handoff.write_text(
+        json.dumps(
+            {
+                "paper_blocker_report_path": str(blocker),
+                "status": "manual_operator_authorization_required",
+                "manual_authorization_required": True,
+                "remediation_automation_allowed": False,
+                "order_submission_allowed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
     progress.write_text(
         json.dumps(
             {
@@ -2282,6 +2295,8 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
             str(broker_report),
             "--paper-blocker-report-path",
             str(blocker),
+            "--paper-operator-handoff-path",
+            str(handoff),
             "--paper-progress-path",
             str(progress),
         ],
@@ -2306,6 +2321,10 @@ def test_objective_audit_cli_accepts_paper_ledger_paths(tmp_path) -> None:
             "next_required_action"
         ]
         == "clear_opend_kill_switch_then_resubmit_paper_simulate"
+    )
+    assert (
+        opend_check["evidence"]["runtime"]["paper_operator_handoff"]["status"]
+        == "manual_operator_authorization_required"
     )
     profit_check = [
         check

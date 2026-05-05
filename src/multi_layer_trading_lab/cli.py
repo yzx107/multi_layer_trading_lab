@@ -2667,6 +2667,7 @@ def objective_audit(
     execution_log_path: str | None = None,
     broker_report_path: str | None = None,
     paper_blocker_report_path: str | None = None,
+    paper_operator_handoff_path: str | None = None,
     paper_progress_path: str | None = None,
 ) -> None:
     audit = build_objective_audit(
@@ -2704,6 +2705,9 @@ def objective_audit(
             broker_report_path=Path(broker_report_path) if broker_report_path else None,
             paper_blocker_report_path=Path(paper_blocker_report_path)
             if paper_blocker_report_path
+            else None,
+            paper_operator_handoff_path=Path(paper_operator_handoff_path)
+            if paper_operator_handoff_path
             else None,
             paper_progress_path=Path(paper_progress_path) if paper_progress_path else None,
         )

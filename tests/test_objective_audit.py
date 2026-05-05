@@ -1019,6 +1019,162 @@ def test_objective_audit_blocks_stale_paper_blocker_report(tmp_path) -> None:
     assert checklist_item["next_required_action"] == "refresh_paper_blocker_report"
 
 
+def test_objective_audit_includes_paper_operator_handoff(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    blocker = tmp_path / "paper_blocker.json"
+    handoff = tmp_path / "paper_handoff.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [],
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": False},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    blocker.write_text(
+        json.dumps(
+            {
+                "ready_for_next_session": False,
+                "next_required_action": (
+                    "clear_opend_kill_switch_then_resubmit_paper_simulate"
+                ),
+                "next_session_failed_reasons": ["opend_kill_switch_enabled"],
+                "blocker_details": {
+                    "opend_kill_switch": {
+                        "enabled": True,
+                        "kill_switch_file": "/tmp/futu-opend-execution.KILL",
+                        "requires_manual_operator_authorization": True,
+                        "automation_allowed": False,
+                        "next_safe_action": (
+                            "operator_must_explicitly_clear_kill_switch_before_resubmit"
+                        ),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    handoff.write_text(
+        json.dumps(
+            {
+                "paper_blocker_report_path": str(blocker),
+                "status": "manual_operator_authorization_required",
+                "manual_authorization_required": True,
+                "remediation_automation_allowed": False,
+                "order_submission_allowed": False,
+                "next_required_action": (
+                    "clear_opend_kill_switch_then_resubmit_paper_simulate"
+                ),
+                "next_safe_action": (
+                    "operator_must_explicitly_clear_kill_switch_before_resubmit"
+                ),
+                "failed_reasons": ["opend_kill_switch_enabled"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            paper_blocker_report_path=blocker,
+            paper_operator_handoff_path=handoff,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert (
+        opend_check["evidence"]["runtime"]["paper_operator_handoff"]["status"]
+        == "manual_operator_authorization_required"
+    )
+    assert str(handoff) in checklist_item["artifacts"]
+    assert "paper_operator_handoff_allows_order_submission" not in opend_check[
+        "failed_reasons"
+    ]
+
+
+def test_objective_audit_blocks_stale_paper_operator_handoff(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    blocker = tmp_path / "paper_blocker.json"
+    handoff = tmp_path / "paper_handoff.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [],
+                "source_adapters": [],
+                "data_freshness": [],
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": False},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    blocker.write_text(
+        json.dumps({"ready_for_next_session": True, "next_session_failed_reasons": []}),
+        encoding="utf-8",
+    )
+    handoff.write_text(
+        json.dumps(
+            {
+                "paper_blocker_report_path": str(blocker),
+                "status": "no_manual_operator_blocker",
+                "manual_authorization_required": False,
+                "remediation_automation_allowed": False,
+                "order_submission_allowed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.utime(handoff, (1000, 1000))
+    os.utime(blocker, (2000, 2000))
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+            paper_blocker_report_path=blocker,
+            paper_operator_handoff_path=handoff,
+        )
+    )
+    opend_check = [
+        check for check in audit["checks"] if check["requirement"] == "opend_execution_gate"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "opend_execution_gate"
+    ][0]
+
+    assert "stale_paper_operator_handoff" in opend_check["failed_reasons"]
+    assert (
+        opend_check["evidence"]["runtime"]["paper_operator_handoff"][
+            "paper_operator_handoff_stale"
+        ]
+        is True
+    )
+    assert checklist_item["next_required_action"] == "refresh_paper_operator_handoff"
+
+
 def test_objective_audit_uses_paper_progress_for_profitability_next_action(
     tmp_path,
 ) -> None:

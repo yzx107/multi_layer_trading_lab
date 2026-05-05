@@ -26,6 +26,7 @@ class ObjectiveAuditInput:
     execution_log_path: Path | None = None
     broker_report_path: Path | None = None
     paper_blocker_report_path: Path | None = None
+    paper_operator_handoff_path: Path | None = None
     paper_progress_path: Path | None = None
 
 
@@ -212,6 +213,7 @@ def _opend_runtime_ready(
     account_status_path: Path | None = None,
     paper_simulate_status_path: Path | None = None,
     paper_blocker_report_path: Path | None = None,
+    paper_operator_handoff_path: Path | None = None,
     paper_progress_path: Path | None = None,
 ) -> tuple[bool, dict[str, object], list[str]]:
     failed: list[str] = []
@@ -225,6 +227,9 @@ def _opend_runtime_ready(
         ),
         "paper_blocker_report_path": (
             str(paper_blocker_report_path) if paper_blocker_report_path else None
+        ),
+        "paper_operator_handoff_path": (
+            str(paper_operator_handoff_path) if paper_operator_handoff_path else None
         ),
     }
     if runtime_status_path is None or not runtime_status_path.exists():
@@ -315,8 +320,16 @@ def _opend_runtime_ready(
     if blocker_payload is not None:
         evidence["paper_blocker_report"] = blocker_payload
     failed.extend(blocker_failed)
+    handoff_ready, handoff_payload, handoff_failed = _paper_operator_handoff_ready(
+        paper_operator_handoff_path,
+        paper_blocker_report_path=paper_blocker_report_path,
+        paper_blocker_report=blocker_payload,
+    )
+    if handoff_payload is not None:
+        evidence["paper_operator_handoff"] = handoff_payload
+    failed.extend(handoff_failed)
 
-    return not failed and blocker_ready, evidence, list(dict.fromkeys(failed))
+    return not failed and blocker_ready and handoff_ready, evidence, list(dict.fromkeys(failed))
 
 
 def _paper_blocker_ready(
@@ -365,6 +378,56 @@ def _paper_blocker_internal_reference_paths(
         if isinstance(value, str) and value:
             paths.append(Path(value))
     return tuple(paths)
+
+
+def _paper_operator_handoff_ready(
+    path: Path | None,
+    *,
+    paper_blocker_report_path: Path | None,
+    paper_blocker_report: dict[str, object] | None,
+) -> tuple[bool, dict[str, object] | None, list[str]]:
+    if path is None:
+        return True, None, []
+    if not path.exists():
+        return False, None, ["missing_paper_operator_handoff"]
+    payload = dict(_load_json(path))
+    failed: list[str] = []
+    if _is_older_than(path, paper_blocker_report_path):
+        payload["paper_operator_handoff_stale"] = True
+        payload["stale_reference_paths"] = [str(paper_blocker_report_path)]
+        failed.append("stale_paper_operator_handoff")
+    blocker_path = payload.get("paper_blocker_report_path")
+    if (
+        paper_blocker_report_path is not None
+        and isinstance(blocker_path, str)
+        and blocker_path
+        and blocker_path != str(paper_blocker_report_path)
+    ):
+        failed.append("paper_operator_handoff_blocker_report_mismatch")
+
+    kill_switch = _opend_kill_switch_details(paper_blocker_report)
+    if kill_switch is not None and kill_switch.get("enabled") is True:
+        if payload.get("status") != "manual_operator_authorization_required":
+            failed.append("paper_operator_handoff_missing_manual_authorization")
+        if payload.get("manual_authorization_required") is not True:
+            failed.append("paper_operator_handoff_manual_authorization_not_required")
+        if payload.get("remediation_automation_allowed") is not False:
+            failed.append("paper_operator_handoff_allows_automated_remediation")
+        if payload.get("order_submission_allowed") is not False:
+            failed.append("paper_operator_handoff_allows_order_submission")
+    return not failed, payload, list(dict.fromkeys(failed))
+
+
+def _opend_kill_switch_details(
+    paper_blocker_report: dict[str, object] | None,
+) -> dict[str, object] | None:
+    if not isinstance(paper_blocker_report, dict):
+        return None
+    blocker_details = paper_blocker_report.get("blocker_details")
+    if not isinstance(blocker_details, dict):
+        return None
+    kill_switch = blocker_details.get("opend_kill_switch")
+    return kill_switch if isinstance(kill_switch, dict) else None
 
 
 def _positive_float(value: object) -> bool:
@@ -580,6 +643,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         input_data.opend_account_status_path,
         input_data.paper_simulate_status_path,
         input_data.paper_blocker_report_path,
+        input_data.paper_operator_handoff_path,
         input_data.paper_progress_path,
     )
     paper_ledger, paper_ledger_failed = _paper_ledger_evidence(
@@ -867,6 +931,11 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             if input_data.paper_blocker_report_path is not None
             else None
         ),
+        "paper_operator_handoff_path": (
+            str(input_data.paper_operator_handoff_path)
+            if input_data.paper_operator_handoff_path is not None
+            else None
+        ),
         "paper_progress_path": (
             str(input_data.paper_progress_path)
             if input_data.paper_progress_path is not None
@@ -897,6 +966,7 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             opend_account_status_path=input_data.opend_account_status_path,
             paper_simulate_status_path=input_data.paper_simulate_status_path,
             paper_blocker_report_path=input_data.paper_blocker_report_path,
+            paper_operator_handoff_path=input_data.paper_operator_handoff_path,
             paper_progress_path=input_data.paper_progress_path,
             execution_log_path=input_data.execution_log_path,
             broker_report_path=input_data.broker_report_path,
@@ -1179,6 +1249,7 @@ def _prompt_to_artifact_checklist(
     opend_account_status_path: Path | None,
     paper_simulate_status_path: Path | None,
     paper_blocker_report_path: Path | None,
+    paper_operator_handoff_path: Path | None,
     paper_progress_path: Path | None,
     execution_log_path: Path | None,
     broker_report_path: Path | None,
@@ -1219,8 +1290,10 @@ def _prompt_to_artifact_checklist(
             str(opend_ticket_response_path) if opend_ticket_response_path else None,
             str(paper_simulate_status_path) if paper_simulate_status_path else None,
             str(paper_blocker_report_path) if paper_blocker_report_path else None,
+            str(paper_operator_handoff_path) if paper_operator_handoff_path else None,
             "src/multi_layer_trading_lab/execution/opend_tickets.py",
             "src/multi_layer_trading_lab/execution/paper_blocker_report.py",
+            "src/multi_layer_trading_lab/execution/operator_handoff.py",
         ],
         "million_scale_personal_account_risk": [
             str(readiness_manifest_path),
@@ -1301,6 +1374,19 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
             return blocker_action
         if "stale_paper_blocker_report" in failed:
             return "refresh_paper_blocker_report"
+        if _has_any(
+            failed,
+            [
+                "missing_paper_operator_handoff",
+                "stale_paper_operator_handoff",
+                "paper_operator_handoff_blocker_report_mismatch",
+                "paper_operator_handoff_missing_manual_authorization",
+                "paper_operator_handoff_manual_authorization_not_required",
+                "paper_operator_handoff_allows_automated_remediation",
+                "paper_operator_handoff_allows_order_submission",
+            ],
+        ):
+            return "refresh_paper_operator_handoff"
         paper_action = _opend_paper_simulate_next_action(check.get("evidence"))
         if paper_action:
             return paper_action
