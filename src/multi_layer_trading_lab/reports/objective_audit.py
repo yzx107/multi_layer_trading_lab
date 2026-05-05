@@ -186,6 +186,25 @@ def _research_input_manifest_reuse(
     return payload, list(dict.fromkeys(hshare_failed)), list(dict.fromkeys(factor_failed))
 
 
+def _freshness_failed_reasons(
+    data_freshness: dict[str, dict[str, object]],
+    datasets: tuple[str, ...],
+) -> list[str]:
+    failed: list[str] = []
+    for dataset in datasets:
+        item = data_freshness.get(dataset)
+        if not item:
+            continue
+        status = item.get("status")
+        if status != "fresh":
+            failed.append(f"{dataset}_not_fresh")
+            if status:
+                failed.append(f"{dataset}_{status}")
+        if _optional_int(item.get("rows")) == 0:
+            failed.append(f"{dataset}_empty")
+    return list(dict.fromkeys(failed))
+
+
 def _opend_runtime_ready(
     quote_snapshot_path: Path | None,
     ticket_response_path: Path | None,
@@ -629,10 +648,28 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         )
     hk_l2_failed.extend(hshare_reuse_failed)
     hk_l2_failed = list(dict.fromkeys(hk_l2_failed))
-    tushare_ready = (
-        data_sources.get("tushare", {}).get("ready") is True
-        and source_adapters.get("tushare", {}).get("live_data_ready") is True
+    tushare_data_failed = _freshness_failed_reasons(
+        data_freshness,
+        ("security_master", "daily_features"),
     )
+    tushare_failed = (
+        []
+        if data_sources.get("tushare", {}).get("ready") is True
+        else _readiness_failed_reasons(
+            data_sources.get("tushare", {}),
+            "tushare_source_not_ready",
+        )
+    )
+    if source_adapters.get("tushare", {}).get("live_data_ready") is not True:
+        tushare_failed.extend(
+            _readiness_failed_reasons(
+                source_adapters.get("tushare", {}),
+                "tushare_adapter_not_live_data_ready",
+            )
+        )
+    tushare_failed.extend(tushare_data_failed)
+    tushare_failed = list(dict.fromkeys(tushare_failed))
+    tushare_ready = not tushare_failed
     ifind_ready = (
         data_sources.get("ifind", {}).get("ready") is True
         and source_adapters.get("ifind", {}).get("live_data_ready") is True
@@ -705,7 +742,12 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
             "evidence": {
                 "data_source": data_sources.get("tushare", {}),
                 "source_adapter": source_adapters.get("tushare", {}),
+                "freshness": {
+                    "security_master": data_freshness.get("security_master", {}),
+                    "daily_features": data_freshness.get("daily_features", {}),
+                },
             },
+            "failed_reasons": tushare_failed,
         },
         {
             "requirement": "ifind_real_data_adapter",
@@ -995,6 +1037,7 @@ def _success_criteria() -> list[dict[str, object]]:
             "minimum_evidence": [
                 "tushare credential ready",
                 "tushare source adapter live_data_ready",
+                "security_master and daily_features are fresh when present in readiness",
             ],
         },
         {
@@ -1083,6 +1126,8 @@ def _prompt_to_artifact_checklist(
         "tushare_real_data_adapter": [
             str(readiness_manifest_path),
             "src/multi_layer_trading_lab/adapters/tushare/client.py",
+            "data/lake/security_master",
+            "data/lake/daily_features",
         ],
         "ifind_real_data_adapter": [
             str(readiness_manifest_path),
@@ -1276,6 +1321,18 @@ def _next_required_action(requirement: str, check: dict[str, object]) -> str:
     if requirement == "ifind_real_data_adapter":
         return "refresh_or_import_real_ifind_events"
     if requirement == "tushare_real_data_adapter":
+        if _has_any(
+            failed,
+            [
+                "security_master_not_fresh",
+                "security_master_stub",
+                "security_master_empty",
+                "daily_features_not_fresh",
+                "daily_features_stub",
+                "daily_features_empty",
+            ],
+        ):
+            return "refresh_tushare_real_lake_datasets"
         return "refresh_tushare_real_adapter_status"
     if requirement == "hk_l2_data_reuse":
         if _has_any(
@@ -1429,7 +1486,7 @@ def _next_required_evidence(requirement: str) -> str:
         ),
         "tushare_real_data_adapter": (
             "Run fetch-tushare-to-lake --use-real and confirm data-adapter-status "
-            "reports live data."
+            "reports live data with non-stub security_master and daily_features rows."
         ),
         "wall_street_style_research_and_gate_process": (
             "Pass research-audit and go-live-readiness research_to_paper gates, with "

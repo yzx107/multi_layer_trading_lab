@@ -213,6 +213,65 @@ def test_objective_audit_marks_missing_ifind_validation_report(tmp_path) -> None
     assert ifind_check["evidence"]["validation_report"]["report_path"] == str(ifind_validation)
 
 
+def test_objective_audit_blocks_stub_tushare_lake_datasets(tmp_path) -> None:
+    readiness = tmp_path / "readiness.json"
+    output = tmp_path / "audit.json"
+    readiness.write_text(
+        json.dumps(
+            {
+                "go_live_approved": False,
+                "account_risk_budget": {"account_equity": 1_000_000},
+                "data_sources": [
+                    {"source": "tushare", "ready": True},
+                    {"source": "ifind", "ready": True},
+                ],
+                "source_adapters": [
+                    {
+                        "source": "tushare",
+                        "adapter_status": "real_adapter",
+                        "live_data_ready": True,
+                    },
+                    {"source": "ifind", "adapter_status": "real_adapter", "live_data_ready": True},
+                ],
+                "data_freshness": [
+                    {"dataset": "security_master", "status": "stub", "rows": 1},
+                    {"dataset": "daily_features", "status": "stub", "rows": 10},
+                    {"dataset": "intraday_l2_features", "status": "fresh", "rows": 100},
+                ],
+                "hshare_verified": {"ready": True},
+                "execution": {"opend_ready": False},
+                "research_to_paper": {"approved": True},
+                "paper_to_live": {"approved": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    audit = build_objective_audit(
+        ObjectiveAuditInput(
+            readiness_manifest_path=readiness,
+            output_path=output,
+        )
+    )
+    tushare_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "tushare_real_data_adapter"
+    ][0]
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "tushare_real_data_adapter"
+    ][0]
+
+    assert tushare_check["status"] == "blocked"
+    assert "security_master_stub" in tushare_check["failed_reasons"]
+    assert "daily_features_stub" in tushare_check["failed_reasons"]
+    assert checklist_item["next_required_action"] == "refresh_tushare_real_lake_datasets"
+    assert "data/lake/security_master" in checklist_item["artifacts"]
+    assert "data/lake/daily_features" in checklist_item["artifacts"]
+
+
 def test_objective_audit_requires_positive_reconciled_profitability(tmp_path) -> None:
     readiness = tmp_path / "readiness.json"
     profitability = tmp_path / "profitability.json"
