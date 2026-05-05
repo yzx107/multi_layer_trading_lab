@@ -403,9 +403,17 @@ def test_objective_audit_report_renders_blockers_and_next_evidence(tmp_path) -> 
 
     assert "# Objective Completion Audit" in report
     assert "Status: not_achieved" in report
+    assert "| Requirement | Status | Next Action |" in report
     assert "ifind_real_data_adapter" in report
+    assert "refresh_or_import_real_ifind_events" in report
     assert "import-ifind-events-file" in report
     assert "profitable_reconciled_paper_or_live_evidence" in report
+    paper_check = [
+        check
+        for check in audit["checks"]
+        if check["requirement"] == "paper_to_live_execution_evidence"
+    ][0]
+    assert "paper_to_live_not_approved" in paper_check["failed_reasons"]
 
 
 def test_objective_audit_requires_opend_runtime_evidence(tmp_path) -> None:
@@ -925,3 +933,12 @@ def test_objective_audit_marks_stale_paper_simulate_status(tmp_path) -> None:
     assert "stale_paper_simulate_status" in opend_check["failed_reasons"]
     assert "missing_submitted_responses" not in opend_check["failed_reasons"]
     assert opend_check["evidence"]["runtime"]["paper_simulate_status_stale"] is True
+    checklist_item = [
+        item
+        for item in audit["prompt_to_artifact_checklist"]
+        if item["requirement"] == "opend_execution_gate"
+    ][0]
+    assert (
+        checklist_item["next_required_action"]
+        == "regenerate_paper_simulate_status_from_latest_responses"
+    )

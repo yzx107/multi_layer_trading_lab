@@ -260,6 +260,13 @@ def _ifind_validation_payload(path: Path | None) -> dict[str, object] | None:
     return _load_json(path)
 
 
+def _readiness_failed_reasons(evidence: object, default_reason: str) -> list[str]:
+    if not isinstance(evidence, dict):
+        return [default_reason]
+    reasons = [str(reason) for reason in evidence.get("failed_reasons", [])]
+    return list(dict.fromkeys(reasons or [default_reason]))
+
+
 def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     readiness = _load_json(input_data.readiness_manifest_path)
     ifind_validation_payload = _ifind_validation_payload(input_data.ifind_validation_report_path)
@@ -308,7 +315,19 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
     opend_ready = readiness.get("execution", {}).get("opend_ready") is True and opend_runtime_ready
     personal_risk_ready = bool(readiness.get("account_risk_budget"))
     research_ready = readiness.get("research_to_paper", {}).get("approved") is True
-    paper_ready = readiness.get("paper_to_live", {}).get("approved") is True
+    paper_to_live_evidence = readiness.get("paper_to_live", {})
+    paper_ready = (
+        isinstance(paper_to_live_evidence, dict)
+        and paper_to_live_evidence.get("approved") is True
+    )
+    paper_failed = (
+        []
+        if paper_ready
+        else _readiness_failed_reasons(
+            paper_to_live_evidence,
+            "paper_to_live_not_approved",
+        )
+    )
     go_live_ready = readiness.get("go_live_approved") is True
 
     checks = [
@@ -365,7 +384,8 @@ def build_objective_audit(input_data: ObjectiveAuditInput) -> dict[str, object]:
         {
             "requirement": "paper_to_live_execution_evidence",
             "status": _status(paper_ready),
-            "evidence": readiness.get("paper_to_live", {}),
+            "evidence": paper_to_live_evidence,
+            "failed_reasons": paper_failed,
         },
         {
             "requirement": "profitable_reconciled_paper_or_live_evidence",
@@ -488,8 +508,8 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
         "",
         "## Prompt To Artifact Checklist",
         "",
-        "| Requirement | Status | Verification | Artifacts | Failed Reasons |",
-        "| --- | --- | --- | --- | --- |",
+        "| Requirement | Status | Next Action | Verification | Artifacts | Failed Reasons |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     checklist = audit.get("prompt_to_artifact_checklist", [])
     if isinstance(checklist, list):
@@ -502,6 +522,7 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
                     [
                         _md_cell(item.get("requirement")),
                         _md_cell(item.get("status")),
+                        _md_cell(item.get("next_required_action")),
                         _md_cell(item.get("verification_command")),
                         _md_cell(item.get("artifacts")),
                         _md_cell(item.get("failed_reasons")),
@@ -700,9 +721,109 @@ def _prompt_to_artifact_checklist(
                 "status": check.get("status", "blocked"),
                 "evidence": check.get("evidence"),
                 "failed_reasons": check.get("failed_reasons", []),
+                "next_required_action": _next_required_action(requirement_id, check),
             }
         )
     return checklist
+
+
+def _next_required_action(requirement: str, check: dict[str, object]) -> str:
+    if check.get("status") == "passed":
+        return "none"
+    failed = [
+        str(reason)
+        for reason in check.get("failed_reasons", [])
+        if str(reason)
+    ]
+    if requirement == "opend_execution_gate":
+        paper_action = _opend_paper_simulate_next_action(check.get("evidence"))
+        if paper_action:
+            return paper_action
+        if "stale_paper_simulate_status" in failed:
+            return "regenerate_paper_simulate_status_from_latest_responses"
+        if "opend_kill_switch_enabled" in failed:
+            return "clear_opend_kill_switch_then_resubmit_paper_simulate"
+        if _has_any(
+            failed,
+            [
+                "missing_opend_account_status",
+                "missing_hk_stock_simulate_account",
+                "opend_account_not_ready_for_paper_simulate",
+            ],
+        ):
+            return "refresh_or_select_hk_stock_simulate_account"
+        if "missing_opend_runtime_status" in failed:
+            return "fetch_opend_runtime_status"
+        if _has_any(
+            failed,
+            [
+                "missing_opend_quote_snapshot",
+                "invalid_opend_quote_snapshot",
+                "opend_quote_missing_symbol",
+                "opend_quote_missing_lot_size",
+                "opend_quote_missing_reference_price",
+            ],
+        ):
+            return "fetch_opend_quote_snapshot"
+        if _has_any(
+            failed,
+            [
+                "missing_opend_ticket_response",
+                "empty_opend_ticket_response",
+                "missing_submitted_opend_ticket_response",
+                "missing_submitted_responses",
+                "paper_simulate_submit_errors_present",
+            ],
+        ):
+            return "submit_opend_paper_tickets_with_simulate_enabled"
+        return "refresh_opend_execution_evidence"
+    if requirement == "paper_to_live_execution_evidence":
+        return "collect_broker_reconciled_paper_sessions"
+    if requirement == "profitable_reconciled_paper_or_live_evidence":
+        if "profitability_not_reconciled_to_broker" in failed:
+            return "reconcile_profitability_evidence_to_broker"
+        if _has_any(
+            failed,
+            [
+                "insufficient_inferred_paper_sessions",
+                "insufficient_profitable_paper_sessions",
+                "paper_sessions_exceed_inferred_sessions",
+            ],
+        ):
+            return "collect_remaining_broker_reconciled_paper_sessions"
+        if _has_any(failed, ["net_pnl_not_positive", "drawdown_breached"]):
+            return "continue_research_and_paper_iteration_until_profitable"
+        return "refresh_profitability_evidence"
+    if requirement == "ifind_real_data_adapter":
+        return "refresh_or_import_real_ifind_events"
+    if requirement == "tushare_real_data_adapter":
+        return "refresh_tushare_real_adapter_status"
+    if requirement == "hk_l2_data_reuse":
+        return "refresh_hshare_verified_and_l2_freshness"
+    if requirement == "wall_street_style_research_and_gate_process":
+        return "rerun_research_audit_and_readiness_gate"
+    if requirement == "million_scale_personal_account_risk":
+        return "rerun_million_scale_risk_precheck"
+    return "inspect_blocked_requirement"
+
+
+def _opend_paper_simulate_next_action(evidence: object) -> str | None:
+    if not isinstance(evidence, dict):
+        return None
+    runtime = evidence.get("runtime")
+    if not isinstance(runtime, dict):
+        return None
+    if runtime.get("paper_simulate_status_stale") is True:
+        return None
+    paper_status = runtime.get("paper_simulate_status")
+    if not isinstance(paper_status, dict):
+        return None
+    action = paper_status.get("next_required_action")
+    return str(action) if action else None
+
+
+def _has_any(failed: list[str], reasons: list[str]) -> bool:
+    return any(reason in failed for reason in reasons)
 
 
 def _format_list(value: object) -> str:
