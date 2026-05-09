@@ -1615,6 +1615,8 @@ def paper_blocker_report(
         typer.echo(f"ready_for_live_review={str(report.ready_for_live_review).lower()}")
     if report.next_required_action:
         typer.echo(f"next_required_action={report.next_required_action}")
+    if report.next_required_evidence:
+        typer.echo(f"next_required_evidence={','.join(report.next_required_evidence)}")
     if report.sessions_remaining is not None:
         typer.echo(f"sessions_remaining={report.sessions_remaining}")
     typer.echo(f"paper_blocker_report={output_path}")
@@ -1649,6 +1651,8 @@ def paper_operator_handoff(
     )
     if handoff.next_required_action:
         typer.echo(f"next_required_action={handoff.next_required_action}")
+    if handoff.next_required_evidence:
+        typer.echo(f"next_required_evidence={','.join(handoff.next_required_evidence)}")
     if handoff.next_safe_action:
         typer.echo(f"next_safe_action={handoff.next_safe_action}")
     typer.echo(f"paper_operator_handoff={output_path}")

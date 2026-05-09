@@ -41,6 +41,10 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
             {
                 "ready_for_live_review": False,
                 "sessions_remaining": 19,
+                "next_required_evidence": [
+                    "collect_19_broker_reconciled_paper_sessions",
+                    "continue_until_positive_reconciled_net_pnl",
+                ],
                 "failed_reasons": ["paper_sessions_remaining"],
             }
         ),
@@ -61,6 +65,14 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
         == "clear_opend_kill_switch_then_resubmit_paper_simulate"
     )
     assert report.sessions_remaining == 19
+    assert report.next_required_evidence == (
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    )
+    assert report.to_dict()["next_required_evidence"] == [
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    ]
     assert "opend_kill_switch_enabled" in report.failed_reasons
     assert "opend_kill_switch_enabled" in report.next_session_failed_reasons
     assert report.blocker_details["opend_kill_switch"] == {

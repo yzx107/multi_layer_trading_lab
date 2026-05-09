@@ -2724,6 +2724,7 @@ def test_paper_simulate_status_cli_blocks_dry_run_response(tmp_path) -> None:
 def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
     runtime = tmp_path / "runtime.json"
     paper_status = tmp_path / "paper_status.json"
+    progress = tmp_path / "progress.json"
     output = tmp_path / "blockers.json"
     runtime.write_text(
         json.dumps(
@@ -2745,6 +2746,20 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
         ),
         encoding="utf-8",
     )
+    progress.write_text(
+        json.dumps(
+            {
+                "ready_for_live_review": False,
+                "sessions_remaining": 19,
+                "next_required_evidence": [
+                    "collect_19_broker_reconciled_paper_sessions",
+                    "continue_until_positive_reconciled_net_pnl",
+                ],
+                "failed_reasons": ["paper_sessions_remaining"],
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -2759,7 +2774,7 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
             "--paper-session-calendar-path",
             "",
             "--paper-progress-path",
-            "",
+            str(progress),
         ],
     )
 
@@ -2771,14 +2786,23 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
     )
     assert "opend_kill_switch_enabled" in result.output
     assert "missing_submitted_responses" in result.output
+    assert (
+        "next_required_evidence=collect_19_broker_reconciled_paper_sessions,"
+        "continue_until_positive_reconciled_net_pnl"
+    ) in result.output
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["failed_reasons"] == [
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
+        "paper_sessions_remaining",
     ]
     assert payload["next_session_failed_reasons"] == [
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
+    ]
+    assert payload["next_required_evidence"] == [
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
     ]
     assert payload["blocker_details"]["opend_kill_switch"] == {
         "enabled": True,
@@ -2801,6 +2825,10 @@ def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) 
                 ),
                 "failed_reasons": ["opend_kill_switch_enabled"],
                 "next_session_failed_reasons": ["opend_kill_switch_enabled"],
+                "next_required_evidence": [
+                    "collect_19_broker_reconciled_paper_sessions",
+                    "continue_until_positive_reconciled_net_pnl",
+                ],
                 "blocker_details": {
                     "opend_kill_switch": {
                         "enabled": True,
@@ -2834,11 +2862,19 @@ def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) 
     assert "remediation_automation_allowed=false" in result.output
     assert "order_submission_allowed=false" in result.output
     assert "opend_kill_switch_enabled" in result.output
+    assert (
+        "next_required_evidence=collect_19_broker_reconciled_paper_sessions,"
+        "continue_until_positive_reconciled_net_pnl"
+    ) in result.output
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "manual_operator_authorization_required"
     assert payload["manual_authorization_required"] is True
     assert payload["remediation_automation_allowed"] is False
     assert payload["order_submission_allowed"] is False
+    assert payload["next_required_evidence"] == [
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    ]
     assert "do_not_clear_kill_switch_from_automation" in payload["prohibited_actions"]
 
 

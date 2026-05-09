@@ -23,6 +23,10 @@ def test_paper_operator_handoff_requires_manual_kill_switch_authorization(
                     "missing_submitted_responses",
                 ],
                 "next_session_failed_reasons": ["opend_kill_switch_enabled"],
+                "next_required_evidence": [
+                    "collect_19_broker_reconciled_paper_sessions",
+                    "continue_until_positive_reconciled_net_pnl",
+                ],
                 "blocker_details": {
                     "opend_kill_switch": {
                         "enabled": True,
@@ -49,6 +53,14 @@ def test_paper_operator_handoff_requires_manual_kill_switch_authorization(
         handoff.next_safe_action
         == "operator_must_explicitly_clear_kill_switch_before_resubmit"
     )
+    assert handoff.next_required_evidence == (
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    )
+    assert handoff.to_dict()["next_required_evidence"] == [
+        "collect_19_broker_reconciled_paper_sessions",
+        "continue_until_positive_reconciled_net_pnl",
+    ]
     assert "do_not_clear_kill_switch_from_automation" in handoff.prohibited_actions
     assert "do_not_submit_paper_or_live_orders_from_handoff" in handoff.prohibited_actions
     assert "opend_kill_switch_enabled" in handoff.failed_reasons

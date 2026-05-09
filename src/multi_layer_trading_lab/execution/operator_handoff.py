@@ -13,6 +13,7 @@ class PaperOperatorHandoff:
     remediation_automation_allowed: bool
     order_submission_allowed: bool
     next_required_action: str | None
+    next_required_evidence: tuple[str, ...]
     next_safe_action: str | None
     failed_reasons: tuple[str, ...]
     operator_actions: tuple[str, ...]
@@ -28,6 +29,7 @@ class PaperOperatorHandoff:
             "remediation_automation_allowed": self.remediation_automation_allowed,
             "order_submission_allowed": self.order_submission_allowed,
             "next_required_action": self.next_required_action,
+            "next_required_evidence": list(self.next_required_evidence),
             "next_safe_action": self.next_safe_action,
             "failed_reasons": list(self.failed_reasons),
             "operator_actions": list(self.operator_actions),
@@ -55,6 +57,7 @@ def build_paper_operator_handoff(
     )
     kill_switch = _kill_switch_details(blocker_details)
     next_required_action = _optional_str(payload.get("next_required_action"))
+    next_required_evidence = _next_required_evidence(payload)
     if kill_switch is not None and kill_switch.get("enabled") is True:
         next_safe_action = _optional_str(kill_switch.get("next_safe_action")) or (
             "operator_must_explicitly_clear_kill_switch_before_resubmit"
@@ -66,6 +69,7 @@ def build_paper_operator_handoff(
             remediation_automation_allowed=False,
             order_submission_allowed=False,
             next_required_action=next_required_action,
+            next_required_evidence=next_required_evidence,
             next_safe_action=next_safe_action,
             failed_reasons=failed_reasons,
             operator_actions=(
@@ -107,6 +111,7 @@ def build_paper_operator_handoff(
             remediation_automation_allowed=False,
             order_submission_allowed=False,
             next_required_action=next_required_action,
+            next_required_evidence=next_required_evidence,
             next_safe_action="continue_with_normal_paper_session_gate",
             failed_reasons=failed_reasons,
             operator_actions=("continue_with_normal_paper_session_gate",),
@@ -122,6 +127,7 @@ def build_paper_operator_handoff(
         remediation_automation_allowed=False,
         order_submission_allowed=False,
         next_required_action=next_required_action,
+        next_required_evidence=next_required_evidence,
         next_safe_action=next_required_action,
         failed_reasons=failed_reasons,
         operator_actions=(
@@ -166,6 +172,7 @@ def _missing_blocker_report_handoff(path: Path) -> PaperOperatorHandoff:
         remediation_automation_allowed=False,
         order_submission_allowed=False,
         next_required_action="run_paper_blocker_report",
+        next_required_evidence=(),
         next_safe_action="run_paper_blocker_report",
         failed_reasons=("missing_paper_blocker_report",),
         operator_actions=("run_paper_blocker_report",),
@@ -189,6 +196,7 @@ def _invalid_blocker_report_handoff(path: Path) -> PaperOperatorHandoff:
         remediation_automation_allowed=False,
         order_submission_allowed=False,
         next_required_action="regenerate_paper_blocker_report",
+        next_required_evidence=(),
         next_safe_action="regenerate_paper_blocker_report",
         failed_reasons=("invalid_paper_blocker_report",),
         operator_actions=("regenerate_paper_blocker_report",),
@@ -211,6 +219,13 @@ def _failed_reasons(payload: dict[str, object]) -> tuple[str, ...]:
         if isinstance(value, list):
             reasons.extend(str(reason) for reason in value if str(reason))
     return tuple(dict.fromkeys(reasons))
+
+
+def _next_required_evidence(payload: dict[str, object]) -> tuple[str, ...]:
+    value = payload.get("next_required_evidence")
+    if not isinstance(value, list):
+        return ()
+    return tuple(dict.fromkeys(str(item) for item in value if str(item)))
 
 
 def _kill_switch_details(blocker_details: object) -> dict[str, object] | None:

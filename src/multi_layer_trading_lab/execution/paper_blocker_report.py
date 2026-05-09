@@ -14,6 +14,7 @@ class PaperBlockerReport:
     ready_for_next_session: bool
     ready_for_live_review: bool | None
     next_required_action: str | None
+    next_required_evidence: tuple[str, ...]
     sessions_remaining: int | None
     failed_reasons: tuple[str, ...]
     next_session_failed_reasons: tuple[str, ...]
@@ -36,6 +37,7 @@ class PaperBlockerReport:
             "ready_for_next_session": self.ready_for_next_session,
             "ready_for_live_review": self.ready_for_live_review,
             "next_required_action": self.next_required_action,
+            "next_required_evidence": list(self.next_required_evidence),
             "sessions_remaining": self.sessions_remaining,
             "failed_reasons": list(self.failed_reasons),
             "next_session_failed_reasons": list(self.next_session_failed_reasons),
@@ -115,6 +117,7 @@ def build_paper_blocker_report(
         failed.append(reason)
         next_session_failed.append(reason)
     sessions_remaining = _optional_int(progress.get("sessions_remaining")) if progress else None
+    next_required_evidence = _next_required_evidence(progress)
     ready_for_live_review = (
         progress.get("ready_for_live_review") is True if progress is not None else None
     )
@@ -140,6 +143,7 @@ def build_paper_blocker_report(
         ready_for_next_session=not next_session_failed_tuple,
         ready_for_live_review=ready_for_live_review,
         next_required_action=next_action,
+        next_required_evidence=next_required_evidence,
         sessions_remaining=sessions_remaining,
         failed_reasons=failed,
         next_session_failed_reasons=next_session_failed_tuple,
@@ -212,6 +216,15 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _next_required_evidence(progress: dict[str, object] | None) -> tuple[str, ...]:
+    if progress is None:
+        return ()
+    raw = progress.get("next_required_evidence")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(dict.fromkeys(str(item) for item in raw if str(item)))
 
 
 def _blocker_details(
