@@ -20,6 +20,7 @@ class DailyOpsPlan:
     paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json")
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json")
     market_holiday_dates: tuple[str, ...] = ()
+    market_holiday_calendar_path: Path | None = None
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json")
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json")
     opend_account_status_path: Path | None = Path("data/logs/opend_account_status.json")
@@ -77,7 +78,11 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
             "--target-sessions",
             "20",
         ]
-        _extend_market_holidays(command=command, holidays=plan.market_holiday_dates)
+        _extend_market_holidays(
+            command=command,
+            holidays=plan.market_holiday_dates,
+            calendar_path=plan.market_holiday_calendar_path,
+        )
         if require_collect_today:
             command.append("--require-collect-today")
         return command
@@ -616,6 +621,7 @@ def default_plan(
     paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json"),
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json"),
     market_holiday_dates: tuple[str, ...] = (),
+    market_holiday_calendar_path: Path | None = None,
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json"),
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json"),
     opend_account_status_path: Path | None = Path("data/logs/opend_account_status.json"),
@@ -662,6 +668,7 @@ def default_plan(
         paper_operator_handoff_path=paper_operator_handoff_path,
         paper_session_calendar_path=paper_session_calendar_path,
         market_holiday_dates=market_holiday_dates,
+        market_holiday_calendar_path=market_holiday_calendar_path,
         opend_quote_snapshot_path=opend_quote_snapshot_path,
         opend_runtime_status_path=opend_runtime_status_path,
         opend_account_status_path=opend_account_status_path,
@@ -697,6 +704,13 @@ def default_plan(
     )
 
 
-def _extend_market_holidays(*, command: list[str], holidays: tuple[str, ...]) -> None:
+def _extend_market_holidays(
+    *,
+    command: list[str],
+    holidays: tuple[str, ...],
+    calendar_path: Path | None,
+) -> None:
     if holidays:
         command.extend(["--market-holiday-dates", ",".join(holidays)])
+    if calendar_path is not None:
+        command.extend(["--market-holiday-calendar-path", str(calendar_path)])

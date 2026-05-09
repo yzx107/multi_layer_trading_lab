@@ -1510,6 +1510,7 @@ def paper_session_calendar(
     as_of_date: str | None = None,
     target_sessions: int = 20,
     market_holiday_dates: str = "",
+    market_holiday_calendar_path: str | None = None,
     require_collect_today: bool = False,
 ) -> None:
     calendar = write_paper_session_calendar(
@@ -1518,7 +1519,12 @@ def paper_session_calendar(
         output_path=Path(output_path),
         as_of_date=as_of_date,
         target_sessions=target_sessions,
-        market_holiday_dates=_split_csv(market_holiday_dates),
+        market_holiday_dates=_market_holiday_dates(
+            inline_dates=market_holiday_dates,
+            calendar_path=Path(market_holiday_calendar_path)
+            if market_holiday_calendar_path
+            else None,
+        ),
     )
     typer.echo(f"next_required_action={calendar.next_required_action}")
     typer.echo(f"as_of_date={calendar.as_of_date}")
@@ -1677,6 +1683,43 @@ def _split_paths(value: str) -> tuple[Path, ...]:
 
 def _split_csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _market_holiday_dates(
+    *,
+    inline_dates: str,
+    calendar_path: Path | None,
+) -> tuple[str, ...]:
+    dates = list(_split_csv(inline_dates))
+    if calendar_path is not None:
+        if not calendar_path.exists():
+            raise typer.BadParameter(
+                f"missing market holiday calendar: {calendar_path}"
+            )
+        dates.extend(_parse_market_holiday_calendar(calendar_path))
+    return tuple(dict.fromkeys(date for date in dates if date))
+
+
+def _parse_market_holiday_calendar(path: Path) -> tuple[str, ...]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return ()
+    if text.startswith("[") or text.startswith("{"):
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            for key in ("market_holidays", "holidays", "dates"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return tuple(str(item).strip() for item in value if str(item).strip())
+            return ()
+        if isinstance(payload, list):
+            return tuple(str(item).strip() for item in payload if str(item).strip())
+        return ()
+    dates: list[str] = []
+    for line in text.splitlines():
+        uncommented = line.split("#", 1)[0]
+        dates.extend(_split_csv(uncommented))
+    return tuple(dates)
 
 
 @app.command()

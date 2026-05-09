@@ -217,12 +217,13 @@ kill switch 只能由操作员在明确授权后于自动化之外完成。
   --opend-quote-snapshot-path data/logs/opend_quote_snapshot.json \
   --paper-operator-handoff-path data/logs/paper_operator_handoff.json \
   --market-holiday-dates YYYY-MM-DD,YYYY-MM-DD \
+  --market-holiday-calendar-path configs/hk_market_holidays.json \
   --build-mark-prices-from-opend-quote \
   --mark-prices-path data/logs/mark_prices.json \
   --paper-sessions 20
 ```
 
-`--market-holiday-dates` 用于显式传入港股非交易日，避免假期误触发 paper session 收集；`--build-mark-prices-from-opend-quote` 会在 evidence bundle 前把 OpenD quote snapshot 转成未平仓持仓估值所需的 mark price JSON，减少手工拼接。
+`--market-holiday-dates` / `--market-holiday-calendar-path` 用于显式传入港股非交易日，避免假期误触发 paper session 收集；`--build-mark-prices-from-opend-quote` 会在 evidence bundle 前把 OpenD quote snapshot 转成未平仓持仓估值所需的 mark price JSON，减少手工拼接。
 
 即使 paper evidence 通过，live 仍需要显式增加：
 
