@@ -115,7 +115,7 @@ def build_paper_blocker_report(
         paper_next_action=paper_next_action,
         calendar_next_action=calendar_next_action,
     )
-    if calendar_next_action and calendar_next_action != "collect_today_paper_session":
+    if _calendar_action_blocks_next_session(calendar_next_action):
         reason = f"paper_calendar_action:{calendar_next_action}"
         failed.append(reason)
         next_session_failed.append(reason)
@@ -256,6 +256,10 @@ def _blocker_details(
             ),
         }
     return details
+
+
+def _calendar_action_blocks_next_session(action: str | None) -> bool:
+    return action not in {None, "collect_today_paper_session", "target_complete"}
 
 
 def _resolve_next_required_action(
