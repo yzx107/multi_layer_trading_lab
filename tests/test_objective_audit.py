@@ -681,6 +681,8 @@ def test_objective_audit_report_renders_operator_kill_switch_details() -> None:
                 "evidence": {
                     "runtime": {
                         "paper_blocker_report": {
+                            "next_collect_date": "2026-05-11",
+                            "sessions_remaining": 19,
                             "blocker_details": {
                                 "opend_kill_switch": {
                                     "enabled": True,
@@ -713,6 +715,9 @@ def test_objective_audit_report_renders_operator_kill_switch_details() -> None:
         "next_safe_action=operator_must_explicitly_clear_kill_switch_before_resubmit"
         in report
     )
+    assert "paper_collection_gate" in report
+    assert "next_collect_date=2026-05-11" in report
+    assert "sessions_remaining=19" in report
 
 
 def test_objective_audit_report_renders_nested_evidence_actions() -> None:

@@ -1096,25 +1096,42 @@ def render_objective_audit_report(audit: dict[str, object]) -> str:
 
 
 def _operator_blocker_lines(audit: dict[str, object]) -> list[str]:
-    kill_switch = _opend_kill_switch_blocker(audit)
-    if not kill_switch:
+    blocker = _opend_blocker_report(audit)
+    if blocker is None:
         return []
+    lines: list[str] = []
+    details_payload = blocker.get("blocker_details")
+    details_map = details_payload if isinstance(details_payload, dict) else {}
+    kill_switch = details_map.get("opend_kill_switch")
+    if isinstance(kill_switch, dict):
+        fields = [
+            ("enabled", kill_switch.get("enabled")),
+            ("kill_switch_file", kill_switch.get("kill_switch_file")),
+            (
+                "requires_manual_operator_authorization",
+                kill_switch.get("requires_manual_operator_authorization"),
+            ),
+            ("automation_allowed", kill_switch.get("automation_allowed")),
+            ("next_safe_action", kill_switch.get("next_safe_action")),
+        ]
+        details = "; ".join(
+            f"{key}={_plain_report_value(value)}"
+            for key, value in fields
+            if value is not None and _plain_report_value(value)
+        )
+        lines.append(f"- opend_kill_switch: {details}")
     fields = [
-        ("enabled", kill_switch.get("enabled")),
-        ("kill_switch_file", kill_switch.get("kill_switch_file")),
-        (
-            "requires_manual_operator_authorization",
-            kill_switch.get("requires_manual_operator_authorization"),
-        ),
-        ("automation_allowed", kill_switch.get("automation_allowed")),
-        ("next_safe_action", kill_switch.get("next_safe_action")),
+        ("next_collect_date", blocker.get("next_collect_date")),
+        ("sessions_remaining", blocker.get("sessions_remaining")),
     ]
     details = "; ".join(
         f"{key}={_plain_report_value(value)}"
         for key, value in fields
         if value is not None and _plain_report_value(value)
     )
-    return [f"- opend_kill_switch: {details}"]
+    if details:
+        lines.append(f"- paper_collection_gate: {details}")
+    return lines
 
 
 def _evidence_action_lines(audit: dict[str, object]) -> list[str]:
@@ -1147,7 +1164,7 @@ def _next_required_evidence_actions(value: object) -> tuple[str, ...]:
     return tuple(dict.fromkeys(actions))
 
 
-def _opend_kill_switch_blocker(audit: dict[str, object]) -> dict[str, object] | None:
+def _opend_blocker_report(audit: dict[str, object]) -> dict[str, object] | None:
     for section in ("checks", "prompt_to_artifact_checklist"):
         items = audit.get(section, [])
         if not isinstance(items, list):
@@ -1160,12 +1177,7 @@ def _opend_kill_switch_blocker(audit: dict[str, object]) -> dict[str, object] | 
             blocker = _paper_blocker_report_from_evidence(item.get("evidence"))
             if blocker is None:
                 continue
-            details = blocker.get("blocker_details")
-            if not isinstance(details, dict):
-                continue
-            kill_switch = details.get("opend_kill_switch")
-            if isinstance(kill_switch, dict):
-                return kill_switch
+            return blocker
     return None
 
 
