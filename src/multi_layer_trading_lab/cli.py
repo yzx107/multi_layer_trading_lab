@@ -1522,6 +1522,8 @@ def paper_session_calendar(
     typer.echo(f"as_of_date={calendar.as_of_date}")
     typer.echo(f"has_session_today={str(calendar.has_session_today).lower()}")
     typer.echo(f"is_weekday={str(calendar.is_weekday).lower()}")
+    if calendar.next_collect_date:
+        typer.echo(f"next_collect_date={calendar.next_collect_date}")
     typer.echo(f"inferred_session_count={calendar.inferred_session_count}")
     typer.echo(f"sessions_remaining={calendar.sessions_remaining}")
     if calendar.last_session_date:
@@ -1618,6 +1620,8 @@ def paper_blocker_report(
         typer.echo(f"next_required_action={report.next_required_action}")
     if report.next_required_evidence:
         typer.echo(f"next_required_evidence={','.join(report.next_required_evidence)}")
+    if report.next_collect_date:
+        typer.echo(f"next_collect_date={report.next_collect_date}")
     if report.sessions_remaining is not None:
         typer.echo(f"sessions_remaining={report.sessions_remaining}")
     typer.echo(f"paper_blocker_report={output_path}")
@@ -1654,6 +1658,8 @@ def paper_operator_handoff(
         typer.echo(f"next_required_action={handoff.next_required_action}")
     if handoff.next_required_evidence:
         typer.echo(f"next_required_evidence={','.join(handoff.next_required_evidence)}")
+    if handoff.next_collect_date:
+        typer.echo(f"next_collect_date={handoff.next_collect_date}")
     if handoff.next_safe_action:
         typer.echo(f"next_safe_action={handoff.next_safe_action}")
     typer.echo(f"paper_operator_handoff={output_path}")

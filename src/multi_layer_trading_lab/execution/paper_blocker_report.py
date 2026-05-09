@@ -15,6 +15,7 @@ class PaperBlockerReport:
     ready_for_live_review: bool | None
     next_required_action: str | None
     next_required_evidence: tuple[str, ...]
+    next_collect_date: str | None
     sessions_remaining: int | None
     failed_reasons: tuple[str, ...]
     next_session_failed_reasons: tuple[str, ...]
@@ -38,6 +39,7 @@ class PaperBlockerReport:
             "ready_for_live_review": self.ready_for_live_review,
             "next_required_action": self.next_required_action,
             "next_required_evidence": list(self.next_required_evidence),
+            "next_collect_date": self.next_collect_date,
             "sessions_remaining": self.sessions_remaining,
             "failed_reasons": list(self.failed_reasons),
             "next_session_failed_reasons": list(self.next_session_failed_reasons),
@@ -98,6 +100,7 @@ def build_paper_blocker_report(
         if calendar is not None and calendar.get("next_required_action")
         else None
     )
+    next_collect_date = _optional_str(calendar.get("next_collect_date")) if calendar else None
     paper_next_action = (
         str(paper_status.get("next_required_action"))
         if (
@@ -144,6 +147,7 @@ def build_paper_blocker_report(
         ready_for_live_review=ready_for_live_review,
         next_required_action=next_action,
         next_required_evidence=next_required_evidence,
+        next_collect_date=next_collect_date,
         sessions_remaining=sessions_remaining,
         failed_reasons=failed,
         next_session_failed_reasons=next_session_failed_tuple,
@@ -216,6 +220,13 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
 
 
 def _next_required_evidence(progress: dict[str, object] | None) -> tuple[str, ...]:

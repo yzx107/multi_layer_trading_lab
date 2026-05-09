@@ -33,7 +33,12 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
         encoding="utf-8",
     )
     calendar.write_text(
-        json.dumps({"next_required_action": "collect_today_paper_session"}),
+        json.dumps(
+            {
+                "next_required_action": "collect_today_paper_session",
+                "next_collect_date": "2026-05-05",
+            }
+        ),
         encoding="utf-8",
     )
     progress.write_text(
@@ -69,10 +74,12 @@ def test_paper_blocker_report_aggregates_runtime_and_session_blockers(tmp_path) 
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
     )
+    assert report.next_collect_date == "2026-05-05"
     assert report.to_dict()["next_required_evidence"] == [
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
     ]
+    assert report.to_dict()["next_collect_date"] == "2026-05-05"
     assert "opend_kill_switch_enabled" in report.failed_reasons
     assert "opend_kill_switch_enabled" in report.next_session_failed_reasons
     assert report.blocker_details["opend_kill_switch"] == {

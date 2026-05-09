@@ -27,6 +27,7 @@ def test_paper_operator_handoff_requires_manual_kill_switch_authorization(
                     "collect_19_broker_reconciled_paper_sessions",
                     "continue_until_positive_reconciled_net_pnl",
                 ],
+                "next_collect_date": "2026-05-11",
                 "blocker_details": {
                     "opend_kill_switch": {
                         "enabled": True,
@@ -57,10 +58,12 @@ def test_paper_operator_handoff_requires_manual_kill_switch_authorization(
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
     )
+    assert handoff.next_collect_date == "2026-05-11"
     assert handoff.to_dict()["next_required_evidence"] == [
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
     ]
+    assert handoff.to_dict()["next_collect_date"] == "2026-05-11"
     assert "do_not_clear_kill_switch_from_automation" in handoff.prohibited_actions
     assert "do_not_submit_paper_or_live_orders_from_handoff" in handoff.prohibited_actions
     assert "opend_kill_switch_enabled" in handoff.failed_reasons

@@ -214,6 +214,7 @@ def test_paper_session_calendar_waits_after_today_session(tmp_path) -> None:
     assert calendar.last_session_date == "2026-05-05"
     assert calendar.sessions_remaining == 19
     assert calendar.next_required_action == "wait_next_trade_date"
+    assert calendar.next_collect_date == "2026-05-06"
 
 
 def test_paper_session_calendar_collects_when_today_missing(tmp_path) -> None:
@@ -240,6 +241,7 @@ def test_paper_session_calendar_collects_when_today_missing(tmp_path) -> None:
     assert calendar.is_weekday is True
     assert calendar.last_session_date == "2026-05-04"
     assert calendar.next_required_action == "collect_today_paper_session"
+    assert calendar.next_collect_date == "2026-05-05"
 
 
 def test_paper_session_calendar_waits_on_weekend(tmp_path) -> None:
@@ -267,7 +269,9 @@ def test_paper_session_calendar_waits_on_weekend(tmp_path) -> None:
     assert calendar.last_session_date == "2026-05-04"
     assert calendar.sessions_remaining == 19
     assert calendar.next_required_action == "wait_next_trade_date"
+    assert calendar.next_collect_date == "2026-05-11"
     assert calendar.to_dict()["is_weekday"] is False
+    assert calendar.to_dict()["next_collect_date"] == "2026-05-11"
 
 
 def test_paper_session_calendar_completes_after_target_sessions(tmp_path) -> None:
@@ -298,3 +302,4 @@ def test_paper_session_calendar_completes_after_target_sessions(tmp_path) -> Non
 
     assert calendar.sessions_remaining == 0
     assert calendar.next_required_action == "target_complete"
+    assert calendar.next_collect_date is None

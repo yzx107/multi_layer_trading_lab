@@ -2642,9 +2642,11 @@ def test_paper_session_calendar_cli_writes_next_action(tmp_path) -> None:
     assert "next_required_action=collect_today_paper_session" in result.output
     assert "has_session_today=false" in result.output
     assert "is_weekday=true" in result.output
+    assert "next_collect_date=2026-05-05" in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["as_of_date"] == "2026-05-05"
     assert report["is_weekday"] is True
+    assert report["next_collect_date"] == "2026-05-05"
     assert report["sessions_remaining"] == 19
 
 
@@ -2681,10 +2683,12 @@ def test_paper_session_calendar_cli_waits_on_weekend(tmp_path) -> None:
     assert result.exit_code == 1
     assert "next_required_action=wait_next_trade_date" in result.output
     assert "is_weekday=false" in result.output
+    assert "next_collect_date=2026-05-11" in result.output
     assert "paper_session_calendar_not_collect_today:wait_next_trade_date" in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["as_of_date"] == "2026-05-09"
     assert report["is_weekday"] is False
+    assert report["next_collect_date"] == "2026-05-11"
 
 
 def test_paper_session_calendar_cli_blocks_when_today_already_collected(tmp_path) -> None:
@@ -2765,6 +2769,7 @@ def test_paper_simulate_status_cli_blocks_dry_run_response(tmp_path) -> None:
 def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
     runtime = tmp_path / "runtime.json"
     paper_status = tmp_path / "paper_status.json"
+    calendar = tmp_path / "calendar.json"
     progress = tmp_path / "progress.json"
     output = tmp_path / "blockers.json"
     runtime.write_text(
@@ -2801,6 +2806,15 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
         ),
         encoding="utf-8",
     )
+    calendar.write_text(
+        json.dumps(
+            {
+                "next_required_action": "wait_next_trade_date",
+                "next_collect_date": "2026-05-11",
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = CliRunner().invoke(
         app,
@@ -2813,7 +2827,7 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
             "--paper-simulate-status-path",
             str(paper_status),
             "--paper-session-calendar-path",
-            "",
+            str(calendar),
             "--paper-progress-path",
             str(progress),
         ],
@@ -2831,16 +2845,20 @@ def test_paper_blocker_report_cli_writes_aggregated_blockers(tmp_path) -> None:
         "next_required_evidence=collect_19_broker_reconciled_paper_sessions,"
         "continue_until_positive_reconciled_net_pnl"
     ) in result.output
+    assert "next_collect_date=2026-05-11" in result.output
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["failed_reasons"] == [
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
+        "paper_calendar_action:wait_next_trade_date",
         "paper_sessions_remaining",
     ]
     assert payload["next_session_failed_reasons"] == [
         "opend_kill_switch_enabled",
         "missing_submitted_responses",
+        "paper_calendar_action:wait_next_trade_date",
     ]
+    assert payload["next_collect_date"] == "2026-05-11"
     assert payload["next_required_evidence"] == [
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
@@ -2870,6 +2888,7 @@ def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) 
                     "collect_19_broker_reconciled_paper_sessions",
                     "continue_until_positive_reconciled_net_pnl",
                 ],
+                "next_collect_date": "2026-05-11",
                 "blocker_details": {
                     "opend_kill_switch": {
                         "enabled": True,
@@ -2907,6 +2926,7 @@ def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) 
         "next_required_evidence=collect_19_broker_reconciled_paper_sessions,"
         "continue_until_positive_reconciled_net_pnl"
     ) in result.output
+    assert "next_collect_date=2026-05-11" in result.output
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "manual_operator_authorization_required"
     assert payload["manual_authorization_required"] is True
@@ -2916,6 +2936,7 @@ def test_paper_operator_handoff_cli_writes_manual_kill_switch_handoff(tmp_path) 
         "collect_19_broker_reconciled_paper_sessions",
         "continue_until_positive_reconciled_net_pnl",
     ]
+    assert payload["next_collect_date"] == "2026-05-11"
     assert "do_not_clear_kill_switch_from_automation" in payload["prohibited_actions"]
 
 

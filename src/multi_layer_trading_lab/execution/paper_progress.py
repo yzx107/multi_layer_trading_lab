@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from multi_layer_trading_lab.execution.session_ledger import (
@@ -65,6 +65,7 @@ class PaperSessionCalendar:
     is_weekday: bool
     last_session_date: str | None
     next_required_action: str
+    next_collect_date: str | None
     failed_reasons: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -79,6 +80,7 @@ class PaperSessionCalendar:
             "is_weekday": self.is_weekday,
             "last_session_date": self.last_session_date,
             "next_required_action": self.next_required_action,
+            "next_collect_date": self.next_collect_date,
             "failed_reasons": list(self.failed_reasons),
         }
 
@@ -182,12 +184,16 @@ def build_paper_session_calendar(
     ]
     if sessions_remaining == 0:
         next_action = "target_complete"
+        next_collect_date = None
     elif not is_weekday:
         next_action = "wait_next_trade_date"
+        next_collect_date = _next_weekday_after(resolved_as_of_date).isoformat()
     elif has_session_today:
         next_action = "wait_next_trade_date"
+        next_collect_date = _next_weekday_after(resolved_as_of_date).isoformat()
     else:
         next_action = "collect_today_paper_session"
+        next_collect_date = as_of
     return PaperSessionCalendar(
         execution_log_path=execution_log_path,
         broker_report_path=broker_report_path,
@@ -199,6 +205,7 @@ def build_paper_session_calendar(
         is_weekday=is_weekday,
         last_session_date=last_session_date,
         next_required_action=next_action,
+        next_collect_date=next_collect_date,
         failed_reasons=tuple(dict.fromkeys(failed)),
     )
 
@@ -382,3 +389,10 @@ def _coerce_date(value: date | str | None) -> date:
     if not text:
         return date.today()
     return datetime.fromisoformat(text).date()
+
+
+def _next_weekday_after(value: date) -> date:
+    next_date = value + timedelta(days=1)
+    while next_date.weekday() >= 5:
+        next_date += timedelta(days=1)
+    return next_date
