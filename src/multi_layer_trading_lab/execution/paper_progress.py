@@ -62,6 +62,7 @@ class PaperSessionCalendar:
     inferred_session_count: int
     sessions_remaining: int
     has_session_today: bool
+    is_weekday: bool
     last_session_date: str | None
     next_required_action: str
     failed_reasons: tuple[str, ...]
@@ -75,6 +76,7 @@ class PaperSessionCalendar:
             "inferred_session_count": self.inferred_session_count,
             "sessions_remaining": self.sessions_remaining,
             "has_session_today": self.has_session_today,
+            "is_weekday": self.is_weekday,
             "last_session_date": self.last_session_date,
             "next_required_action": self.next_required_action,
             "failed_reasons": list(self.failed_reasons),
@@ -168,6 +170,7 @@ def build_paper_session_calendar(
     sessions_remaining = max(0, target_sessions - ledger.inferred_session_count)
     session_dates = tuple(date_text for date_text in ledger.session_dates if date_text <= as_of)
     has_session_today = as_of in session_dates
+    is_weekday = resolved_as_of_date.weekday() < 5
     last_session_date = session_dates[-1] if session_dates else None
     failed = [
         reason
@@ -179,6 +182,8 @@ def build_paper_session_calendar(
     ]
     if sessions_remaining == 0:
         next_action = "target_complete"
+    elif not is_weekday:
+        next_action = "wait_next_trade_date"
     elif has_session_today:
         next_action = "wait_next_trade_date"
     else:
@@ -191,6 +196,7 @@ def build_paper_session_calendar(
         inferred_session_count=ledger.inferred_session_count,
         sessions_remaining=sessions_remaining,
         has_session_today=has_session_today,
+        is_weekday=is_weekday,
         last_session_date=last_session_date,
         next_required_action=next_action,
         failed_reasons=tuple(dict.fromkeys(failed)),

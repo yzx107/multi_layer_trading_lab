@@ -1521,6 +1521,7 @@ def paper_session_calendar(
     typer.echo(f"next_required_action={calendar.next_required_action}")
     typer.echo(f"as_of_date={calendar.as_of_date}")
     typer.echo(f"has_session_today={str(calendar.has_session_today).lower()}")
+    typer.echo(f"is_weekday={str(calendar.is_weekday).lower()}")
     typer.echo(f"inferred_session_count={calendar.inferred_session_count}")
     typer.echo(f"sessions_remaining={calendar.sessions_remaining}")
     if calendar.last_session_date:
