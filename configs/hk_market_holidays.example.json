@@ -1,0 +1,4 @@
+{
+  "market_holidays": [],
+  "notes": "Copy this file to configs/hk_market_holidays.json and fill YYYY-MM-DD HKEX non-trading dates."
+}

@@ -223,7 +223,7 @@ kill switch 只能由操作员在明确授权后于自动化之外完成。
   --paper-sessions 20
 ```
 
-`--market-holiday-dates` / `--market-holiday-calendar-path` 用于显式传入港股非交易日，避免假期误触发 paper session 收集；`--build-mark-prices-from-opend-quote` 会在 evidence bundle 前把 OpenD quote snapshot 转成未平仓持仓估值所需的 mark price JSON，减少手工拼接。
+`--market-holiday-dates` / `--market-holiday-calendar-path` 用于显式传入港股非交易日，避免假期误触发 paper session 收集；可先把 `configs/hk_market_holidays.example.json` 复制为本地 `configs/hk_market_holidays.json` 后维护实际非交易日。`--build-mark-prices-from-opend-quote` 会在 evidence bundle 前把 OpenD quote snapshot 转成未平仓持仓估值所需的 mark price JSON，减少手工拼接。
 
 即使 paper evidence 通过，live 仍需要显式增加：
 
