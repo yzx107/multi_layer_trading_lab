@@ -1509,6 +1509,7 @@ def paper_session_calendar(
     output_path: str = "data/logs/paper_session_calendar.json",
     as_of_date: str | None = None,
     target_sessions: int = 20,
+    market_holiday_dates: str = "",
     require_collect_today: bool = False,
 ) -> None:
     calendar = write_paper_session_calendar(
@@ -1517,11 +1518,14 @@ def paper_session_calendar(
         output_path=Path(output_path),
         as_of_date=as_of_date,
         target_sessions=target_sessions,
+        market_holiday_dates=_split_csv(market_holiday_dates),
     )
     typer.echo(f"next_required_action={calendar.next_required_action}")
     typer.echo(f"as_of_date={calendar.as_of_date}")
     typer.echo(f"has_session_today={str(calendar.has_session_today).lower()}")
     typer.echo(f"is_weekday={str(calendar.is_weekday).lower()}")
+    typer.echo(f"is_market_holiday={str(calendar.is_market_holiday).lower()}")
+    typer.echo(f"is_trading_day={str(calendar.is_trading_day).lower()}")
     if calendar.next_collect_date:
         typer.echo(f"next_collect_date={calendar.next_collect_date}")
     typer.echo(f"inferred_session_count={calendar.inferred_session_count}")
@@ -1669,6 +1673,10 @@ def paper_operator_handoff(
 
 def _split_paths(value: str) -> tuple[Path, ...]:
     return tuple(Path(item.strip()) for item in value.split(",") if item.strip())
+
+
+def _split_csv(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 @app.command()

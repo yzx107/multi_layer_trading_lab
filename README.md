@@ -521,7 +521,8 @@ daily ops 的 `paper-session-plan` 会默认消费 `data/logs/opend_quote_snapsh
 .venv/bin/python -m multi_layer_trading_lab.cli paper-session-calendar \
   --execution-log-path data/logs/execution_log.paper_combined.jsonl \
   --broker-report-path data/logs/futu_order_report.paper_combined.json \
-  --output-path data/logs/paper_session_calendar.paper_combined.json
+  --output-path data/logs/paper_session_calendar.paper_combined.json \
+  --market-holiday-dates YYYY-MM-DD,YYYY-MM-DD
 .venv/bin/python -m multi_layer_trading_lab.cli profitability-evidence \
   --execution-log-path data/logs/execution_log.paper_combined.jsonl \
   --broker-report-path data/logs/futu_order_report.paper_combined.json \
@@ -536,7 +537,7 @@ daily ops 的 `paper-session-plan` 会默认消费 `data/logs/opend_quote_snapsh
 ```
 
 `combine-paper-evidence` 会拒绝 dry-run 行、空文件、重复 order id 和 execution/broker 两边不匹配的 order id；只有合并后 `paper-session-ledger` 推导出至少 20 个 execution/broker 日期交集 session，`profitability-evidence` 才可能进入正收益对账判断。
-`paper-session-calendar` 会根据合并日志判断今天是否已有 broker-backed session，并输出 `collect_today_paper_session`、`wait_next_trade_date` 或 `target_complete`，避免同一天重复累计。
+`paper-session-calendar` 会根据合并日志判断今天是否已有 broker-backed session，并输出 `collect_today_paper_session`、`wait_next_trade_date` 或 `target_complete`，避免同一天重复累计；港股非交易日可用 `--market-holiday-dates` 显式传入，daily ops 也会把同名参数传给 calendar。
 `paper-progress` 是每日收口视图，会直接输出还差多少 session、当前 net PnL、最大回撤、是否 broker reconciled，以及是否可以进入 live review。
 
 带真实 iFind 终端导出文件运行时，daily ops 会先预检并写出验收报告，再导入 lake，随后 readiness/objective audit 会消费 `ifind_events`：

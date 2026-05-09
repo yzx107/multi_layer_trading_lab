@@ -30,6 +30,11 @@ def main() -> None:
         default="data/logs/paper_session_calendar.json",
     )
     parser.add_argument(
+        "--market-holiday-dates",
+        default="",
+        help="Comma-separated non-trading dates to skip in paper session calendar.",
+    )
+    parser.add_argument(
         "--opend-quote-snapshot-path",
         default="data/logs/opend_quote_snapshot.json",
     )
@@ -109,6 +114,7 @@ def main() -> None:
         paper_blocker_report_path=Path(args.paper_blocker_report_path),
         paper_operator_handoff_path=Path(args.paper_operator_handoff_path),
         paper_session_calendar_path=Path(args.paper_session_calendar_path),
+        market_holiday_dates=_split_csv(args.market_holiday_dates),
         opend_quote_snapshot_path=Path(args.opend_quote_snapshot_path),
         opend_runtime_status_path=Path(args.opend_runtime_status_path),
         opend_account_status_path=Path(args.opend_account_status_path),
@@ -155,6 +161,10 @@ def main() -> None:
             failed = True
     if failed:
         raise SystemExit(1)
+
+
+def _split_csv(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 if __name__ == "__main__":

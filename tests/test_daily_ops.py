@@ -410,6 +410,29 @@ def test_build_daily_ops_commands_can_require_calendar_collect_before_simulate_s
     assert commands[12][3] == "paper-simulate-status"
 
 
+def test_build_daily_ops_commands_passes_market_holidays_to_calendar() -> None:
+    commands = build_daily_ops_commands(
+        DailyOpsPlan(
+            python_executable=".venv/bin/python",
+            lake_root=Path("data/lake"),
+            report_path=Path("data/logs/ops.md"),
+            readiness_path=Path("data/logs/readiness.json"),
+            execution_log_path=Path("data/logs/execution.jsonl"),
+            broker_report_path=Path("data/logs/broker.json"),
+            market_holiday_dates=("2026-05-06", "2026-05-07"),
+        )
+    )
+
+    calendar_commands = [
+        command for command in commands if command[3] == "paper-session-calendar"
+    ]
+
+    assert calendar_commands
+    for command in calendar_commands:
+        assert "--market-holiday-dates" in command
+        assert "2026-05-06,2026-05-07" in command
+
+
 def test_build_daily_ops_commands_can_submit_and_build_paper_simulate_evidence() -> None:
     commands = build_daily_ops_commands(
         DailyOpsPlan(

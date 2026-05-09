@@ -211,6 +211,8 @@ def test_paper_session_calendar_waits_after_today_session(tmp_path) -> None:
 
     assert calendar.has_session_today is True
     assert calendar.is_weekday is True
+    assert calendar.is_market_holiday is False
+    assert calendar.is_trading_day is True
     assert calendar.last_session_date == "2026-05-05"
     assert calendar.sessions_remaining == 19
     assert calendar.next_required_action == "wait_next_trade_date"
@@ -239,6 +241,8 @@ def test_paper_session_calendar_collects_when_today_missing(tmp_path) -> None:
 
     assert calendar.has_session_today is False
     assert calendar.is_weekday is True
+    assert calendar.is_market_holiday is False
+    assert calendar.is_trading_day is True
     assert calendar.last_session_date == "2026-05-04"
     assert calendar.next_required_action == "collect_today_paper_session"
     assert calendar.next_collect_date == "2026-05-05"
@@ -266,12 +270,45 @@ def test_paper_session_calendar_waits_on_weekend(tmp_path) -> None:
 
     assert calendar.has_session_today is False
     assert calendar.is_weekday is False
+    assert calendar.is_market_holiday is False
+    assert calendar.is_trading_day is False
     assert calendar.last_session_date == "2026-05-04"
     assert calendar.sessions_remaining == 19
     assert calendar.next_required_action == "wait_next_trade_date"
     assert calendar.next_collect_date == "2026-05-11"
     assert calendar.to_dict()["is_weekday"] is False
     assert calendar.to_dict()["next_collect_date"] == "2026-05-11"
+
+
+def test_paper_session_calendar_waits_on_market_holiday(tmp_path) -> None:
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    execution_log.write_text(
+        json.dumps({"order_id": "ord-1", "trade_date": "2026-05-04", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-04 10:00:00"}]),
+        encoding="utf-8",
+    )
+
+    calendar = build_paper_session_calendar(
+        execution_log_path=execution_log,
+        broker_report_path=broker_report,
+        as_of_date="2026-05-06",
+        target_sessions=20,
+        market_holiday_dates=("2026-05-06",),
+    )
+
+    assert calendar.has_session_today is False
+    assert calendar.is_weekday is True
+    assert calendar.is_market_holiday is True
+    assert calendar.is_trading_day is False
+    assert calendar.last_session_date == "2026-05-04"
+    assert calendar.next_required_action == "wait_next_trade_date"
+    assert calendar.next_collect_date == "2026-05-07"
+    assert calendar.to_dict()["is_market_holiday"] is True
 
 
 def test_paper_session_calendar_completes_after_target_sessions(tmp_path) -> None:

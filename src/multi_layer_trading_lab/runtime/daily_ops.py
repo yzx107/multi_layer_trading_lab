@@ -19,6 +19,7 @@ class DailyOpsPlan:
     paper_blocker_report_path: Path | None = Path("data/logs/paper_blocker_report.json")
     paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json")
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json")
+    market_holiday_dates: tuple[str, ...] = ()
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json")
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json")
     opend_account_status_path: Path | None = Path("data/logs/opend_account_status.json")
@@ -62,6 +63,25 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
             "data/logs/mark_prices.json"
         )
     commands = []
+
+    def _paper_session_calendar_command(*, require_collect_today: bool) -> list[str]:
+        command = [
+            *base,
+            "paper-session-calendar",
+            "--execution-log-path",
+            str(plan.execution_log_path),
+            "--broker-report-path",
+            str(plan.broker_report_path),
+            "--output-path",
+            str(plan.paper_session_calendar_path),
+            "--target-sessions",
+            "20",
+        ]
+        _extend_market_holidays(command=command, holidays=plan.market_holiday_dates)
+        if require_collect_today:
+            command.append("--require-collect-today")
+        return command
+
     if plan.ifind_events_file_path is not None:
         validate_ifind_command = [
             *base,
@@ -195,21 +215,7 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
                 and plan.broker_report_path is not None
                 and plan.paper_session_calendar_path is not None
             ):
-                commands.append(
-                    [
-                        *base,
-                        "paper-session-calendar",
-                        "--execution-log-path",
-                        str(plan.execution_log_path),
-                        "--broker-report-path",
-                        str(plan.broker_report_path),
-                        "--output-path",
-                        str(plan.paper_session_calendar_path),
-                        "--target-sessions",
-                        "20",
-                        "--require-collect-today",
-                    ]
-                )
+                commands.append(_paper_session_calendar_command(require_collect_today=True))
             submit_command = [
                 *base,
                 "submit-opend-paper-tickets",
@@ -315,20 +321,7 @@ def build_daily_ops_commands(plan: DailyOpsPlan) -> list[list[str]]:
         and plan.broker_report_path is not None
         and plan.paper_session_calendar_path is not None
     ):
-        commands.append(
-            [
-                *base,
-                "paper-session-calendar",
-                "--execution-log-path",
-                str(plan.execution_log_path),
-                "--broker-report-path",
-                str(plan.broker_report_path),
-                "--output-path",
-                str(plan.paper_session_calendar_path),
-                "--target-sessions",
-                "20",
-            ]
-        )
+        commands.append(_paper_session_calendar_command(require_collect_today=False))
 
     if (
         plan.execution_log_path is not None
@@ -622,6 +615,7 @@ def default_plan(
     paper_blocker_report_path: Path | None = Path("data/logs/paper_blocker_report.json"),
     paper_operator_handoff_path: Path | None = Path("data/logs/paper_operator_handoff.json"),
     paper_session_calendar_path: Path | None = Path("data/logs/paper_session_calendar.json"),
+    market_holiday_dates: tuple[str, ...] = (),
     opend_quote_snapshot_path: Path | None = Path("data/logs/opend_quote_snapshot.json"),
     opend_runtime_status_path: Path | None = Path("data/logs/opend_runtime_status.json"),
     opend_account_status_path: Path | None = Path("data/logs/opend_account_status.json"),
@@ -667,6 +661,7 @@ def default_plan(
         paper_blocker_report_path=paper_blocker_report_path,
         paper_operator_handoff_path=paper_operator_handoff_path,
         paper_session_calendar_path=paper_session_calendar_path,
+        market_holiday_dates=market_holiday_dates,
         opend_quote_snapshot_path=opend_quote_snapshot_path,
         opend_runtime_status_path=opend_runtime_status_path,
         opend_account_status_path=opend_account_status_path,
@@ -700,3 +695,8 @@ def default_plan(
         opend_env=opend_env,
         manual_live_enable=manual_live_enable,
     )
+
+
+def _extend_market_holidays(*, command: list[str], holidays: tuple[str, ...]) -> None:
+    if holidays:
+        command.extend(["--market-holiday-dates", ",".join(holidays)])

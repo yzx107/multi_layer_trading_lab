@@ -2642,10 +2642,14 @@ def test_paper_session_calendar_cli_writes_next_action(tmp_path) -> None:
     assert "next_required_action=collect_today_paper_session" in result.output
     assert "has_session_today=false" in result.output
     assert "is_weekday=true" in result.output
+    assert "is_market_holiday=false" in result.output
+    assert "is_trading_day=true" in result.output
     assert "next_collect_date=2026-05-05" in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["as_of_date"] == "2026-05-05"
     assert report["is_weekday"] is True
+    assert report["is_market_holiday"] is False
+    assert report["is_trading_day"] is True
     assert report["next_collect_date"] == "2026-05-05"
     assert report["sessions_remaining"] == 19
 
@@ -2683,12 +2687,60 @@ def test_paper_session_calendar_cli_waits_on_weekend(tmp_path) -> None:
     assert result.exit_code == 1
     assert "next_required_action=wait_next_trade_date" in result.output
     assert "is_weekday=false" in result.output
+    assert "is_trading_day=false" in result.output
     assert "next_collect_date=2026-05-11" in result.output
     assert "paper_session_calendar_not_collect_today:wait_next_trade_date" in result.output
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["as_of_date"] == "2026-05-09"
     assert report["is_weekday"] is False
+    assert report["is_trading_day"] is False
     assert report["next_collect_date"] == "2026-05-11"
+
+
+def test_paper_session_calendar_cli_waits_on_market_holiday(tmp_path) -> None:
+    execution_log = tmp_path / "execution.jsonl"
+    broker_report = tmp_path / "broker.json"
+    output = tmp_path / "paper_session_calendar.json"
+    execution_log.write_text(
+        json.dumps({"order_id": "ord-1", "trade_date": "2026-05-04", "dry_run": False})
+        + "\n",
+        encoding="utf-8",
+    )
+    broker_report.write_text(
+        json.dumps([{"local_order_id": "ord-1", "updated_time": "2026-05-04 10:00:00"}]),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "paper-session-calendar",
+            "--execution-log-path",
+            str(execution_log),
+            "--broker-report-path",
+            str(broker_report),
+            "--output-path",
+            str(output),
+            "--as-of-date",
+            "2026-05-06",
+            "--market-holiday-dates",
+            "2026-05-06",
+            "--require-collect-today",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "next_required_action=wait_next_trade_date" in result.output
+    assert "is_weekday=true" in result.output
+    assert "is_market_holiday=true" in result.output
+    assert "is_trading_day=false" in result.output
+    assert "next_collect_date=2026-05-07" in result.output
+    assert "paper_session_calendar_not_collect_today:wait_next_trade_date" in result.output
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["as_of_date"] == "2026-05-06"
+    assert report["is_market_holiday"] is True
+    assert report["is_trading_day"] is False
+    assert report["next_collect_date"] == "2026-05-07"
 
 
 def test_paper_session_calendar_cli_blocks_when_today_already_collected(tmp_path) -> None:

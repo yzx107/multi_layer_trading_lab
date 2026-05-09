@@ -63,6 +63,8 @@ class PaperSessionCalendar:
     sessions_remaining: int
     has_session_today: bool
     is_weekday: bool
+    is_market_holiday: bool
+    is_trading_day: bool
     last_session_date: str | None
     next_required_action: str
     next_collect_date: str | None
@@ -78,6 +80,8 @@ class PaperSessionCalendar:
             "sessions_remaining": self.sessions_remaining,
             "has_session_today": self.has_session_today,
             "is_weekday": self.is_weekday,
+            "is_market_holiday": self.is_market_holiday,
+            "is_trading_day": self.is_trading_day,
             "last_session_date": self.last_session_date,
             "next_required_action": self.next_required_action,
             "next_collect_date": self.next_collect_date,
@@ -162,6 +166,7 @@ def build_paper_session_calendar(
     broker_report_path: Path,
     as_of_date: date | str | None = None,
     target_sessions: int = 20,
+    market_holiday_dates: tuple[date | str, ...] = (),
 ) -> PaperSessionCalendar:
     ledger = build_paper_session_ledger(
         execution_log_path=execution_log_path,
@@ -169,10 +174,13 @@ def build_paper_session_calendar(
     )
     resolved_as_of_date = _coerce_date(as_of_date)
     as_of = resolved_as_of_date.isoformat()
+    market_holidays = _coerce_date_set(market_holiday_dates)
     sessions_remaining = max(0, target_sessions - ledger.inferred_session_count)
     session_dates = tuple(date_text for date_text in ledger.session_dates if date_text <= as_of)
     has_session_today = as_of in session_dates
     is_weekday = resolved_as_of_date.weekday() < 5
+    is_market_holiday = resolved_as_of_date in market_holidays
+    is_trading_day = is_weekday and not is_market_holiday
     last_session_date = session_dates[-1] if session_dates else None
     failed = [
         reason
@@ -185,12 +193,18 @@ def build_paper_session_calendar(
     if sessions_remaining == 0:
         next_action = "target_complete"
         next_collect_date = None
-    elif not is_weekday:
+    elif not is_trading_day:
         next_action = "wait_next_trade_date"
-        next_collect_date = _next_weekday_after(resolved_as_of_date).isoformat()
+        next_collect_date = _next_trading_day_after(
+            resolved_as_of_date,
+            market_holidays=market_holidays,
+        ).isoformat()
     elif has_session_today:
         next_action = "wait_next_trade_date"
-        next_collect_date = _next_weekday_after(resolved_as_of_date).isoformat()
+        next_collect_date = _next_trading_day_after(
+            resolved_as_of_date,
+            market_holidays=market_holidays,
+        ).isoformat()
     else:
         next_action = "collect_today_paper_session"
         next_collect_date = as_of
@@ -203,6 +217,8 @@ def build_paper_session_calendar(
         sessions_remaining=sessions_remaining,
         has_session_today=has_session_today,
         is_weekday=is_weekday,
+        is_market_holiday=is_market_holiday,
+        is_trading_day=is_trading_day,
         last_session_date=last_session_date,
         next_required_action=next_action,
         next_collect_date=next_collect_date,
@@ -217,12 +233,14 @@ def write_paper_session_calendar(
     output_path: Path,
     as_of_date: date | str | None = None,
     target_sessions: int = 20,
+    market_holiday_dates: tuple[date | str, ...] = (),
 ) -> PaperSessionCalendar:
     calendar = build_paper_session_calendar(
         execution_log_path=execution_log_path,
         broker_report_path=broker_report_path,
         as_of_date=as_of_date,
         target_sessions=target_sessions,
+        market_holiday_dates=market_holiday_dates,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
@@ -391,8 +409,12 @@ def _coerce_date(value: date | str | None) -> date:
     return datetime.fromisoformat(text).date()
 
 
-def _next_weekday_after(value: date) -> date:
+def _coerce_date_set(values: tuple[date | str, ...]) -> frozenset[date]:
+    return frozenset(_coerce_date(value) for value in values)
+
+
+def _next_trading_day_after(value: date, *, market_holidays: frozenset[date]) -> date:
     next_date = value + timedelta(days=1)
-    while next_date.weekday() >= 5:
+    while next_date.weekday() >= 5 or next_date in market_holidays:
         next_date += timedelta(days=1)
     return next_date
